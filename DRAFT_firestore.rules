@@ -1,0 +1,223 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitives
+    function isSignedIn() { return request.auth != null && request.auth.token.email_verified == true; }
+    
+    // Helper to get email from token (using get to handle cases without email)
+    function getUserEmail() {
+      return request.auth.token.get('email', '').lower();
+    }
+
+    // Admin logic
+    function isAdmin() { 
+      return isSignedIn() && (
+        getUserEmail() == "yahia1671999@gmail.com" || 
+        (exists(/databases/$(database)/documents/users/$(getUserEmail())) && 
+         get(/databases/$(database)/documents/users/$(getUserEmail())).data.role == "Admin")
+      ); 
+    }
+    
+    function isHR() { 
+      return isSignedIn() && (
+        isAdmin() || 
+        (exists(/databases/$(database)/documents/users/$(getUserEmail())) && 
+         get(/databases/$(database)/documents/users/$(getUserEmail())).data.role == "HR")
+      ); 
+    }
+    
+    function isFinance() { 
+      return isSignedIn() && (
+        isAdmin() || 
+        isHR() || // HR might act as Finance in some setups
+        (exists(/databases/$(database)/documents/users/$(getUserEmail())) && 
+         get(/databases/$(database)/documents/users/$(getUserEmail())).data.role == "Finance")
+      ); 
+    }
+
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+    function isValidId(id) { return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-@\\.]+$'); }
+
+    // Validation Blueprint - AppUser
+    function isValidAppUser(data) {
+      return data.keys().hasAll(['email', 'name', 'role', 'status']) &&
+             data.email is string && data.email.size() <= 256 &&
+             data.name is string && data.name.size() <= 256 &&
+             data.role in ['HR', 'Finance', 'Admin', 'Viewer'] &&
+             data.status in ['Active', 'Inactive'];
+    }
+
+    // Validation Blueprint - Employee
+    function isValidEmployee(data) {
+      return data.keys().hasAll(['employeeId', 'name', 'iqamaNumber', 'status', 'basicSalary', 'paymentMethod']) &&
+             data.employeeId is string && data.employeeId.size() <= 64 &&
+             data.name is string && data.name.size() <= 512 &&
+             data.iqamaNumber is string && data.iqamaNumber.size() <= 64 &&
+             data.status in ['Active', 'Inactive', 'End of Service', 'Leave'] &&
+             data.paymentMethod in ['Bank', 'Cash'] &&
+             data.basicSalary is number && data.basicSalary >= 0 &&
+             data.basicSalary <= 1000000;
+    }
+
+    // Validation Blueprint - PayrollRun
+    function isValidPayrollRun(data) {
+      return data.keys().hasAll(['month', 'status']) &&
+             data.month is string && data.month.matches('^\\d{4}-\\d{2}$') &&
+             data.status in ['Draft', 'Submitted', 'Under Review', 'Approved', 'Locked'];
+    }
+
+    // Validation Blueprint - Transaction
+    function isValidTransaction(data) {
+      return data.keys().hasAll(['employeeId', 'month']) &&
+             data.employeeId is string && data.employeeId.size() <= 128 &&
+             data.month is string && data.month.size() <= 20;
+    }
+
+    // users
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && (getUserEmail() == userId || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isSignedIn() && isValidId(userId) && (isAdmin() || getUserEmail() == userId) && isValidAppUser(incoming());
+      allow update: if isSignedIn() && isValidId(userId) && isValidAppUser(incoming()) && (
+        isAdmin() || (
+          getUserEmail() == userId && 
+          incoming().diff(existing()).affectedKeys().hasOnly(['name']) // Basic user can only change name
+        )
+      );
+      allow delete: if isAdmin() && isValidId(userId);
+    }
+
+    // employees
+    match /employees/{employeeId} {
+      allow get: if isSignedIn() && isValidId(employeeId) && (isHR() || isFinance() || request.auth.uid == employeeId);
+      allow list: if isHR() || isFinance() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isHR() && isValidId(employeeId) && isValidEmployee(incoming());
+      allow update: if isHR() && isValidId(employeeId) && isValidEmployee(incoming()) && (
+        incoming().employeeId == existing().employeeId // Immutable
+      );
+      allow delete: if isAdmin() && isValidId(employeeId);
+    }
+
+    // allowanceTypes
+    match /allowanceTypes/{typeId} {
+      allow read: if isSignedIn() && isValidId(typeId);
+      allow list: if isSignedIn();
+      allow create: if isHR() && isValidId(typeId) && incoming().keys().hasAll(['name']) && incoming().name is string;
+      allow update: if isHR() && isValidId(typeId) && incoming().keys().hasAll(['name']) && incoming().name is string;
+      allow delete: if isHR() && isValidId(typeId);
+    }
+
+    // transactions
+    match /transactions/{transactionId} {
+      allow get: if isSignedIn() && isValidId(transactionId) && (isHR() || isFinance() || existing().employeeId == request.auth.uid);
+      allow list: if isHR() || isFinance() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if (isHR() || isFinance()) && isValidId(transactionId) && isValidTransaction(incoming()) && 
+                      exists(/databases/$(database)/documents/employees/$(incoming().employeeId));
+      allow update: if (isHR() || isFinance()) && isValidId(transactionId) && isValidTransaction(incoming()) && (
+        incoming().employeeId == existing().employeeId // Employee ID cannot change for a transaction
+      );
+      allow delete: if isAdmin() && isValidId(transactionId);
+    }
+
+    // payrollRuns
+    match /payrollRuns/{runId} {
+      allow get, list: if isFinance() || isAdmin() || isHR();
+      allow create: if isFinance() && isValidId(runId) && isValidPayrollRun(incoming());
+      allow update: if isFinance() && isValidId(runId) && isValidPayrollRun(incoming()) && (
+        existing().status != 'Locked' || isAdmin()
+      );
+      allow delete: if isAdmin() && isValidId(runId);
+    }
+
+    // payrollResults
+    // Not currently fully supported by application UI for non-finance, but let's restrict
+    match /payrollResults/{resultId} {
+      allow get: if isSignedIn() && isValidId(resultId) && (isFinance() || existing().employeeId == request.auth.uid);
+      allow list: if isFinance() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']) &&
+          exists(/databases/$(database)/documents/payrollRuns/$(incoming().payrollRunId));
+      allow update: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']);
+      allow delete: if isAdmin() && isValidId(resultId);
+    }
+
+    // attendanceRecords
+    match /attendanceRecords/{recordId} {
+      allow get: if isSignedIn() && (isHR() || existing().employeeId == request.auth.uid);
+      allow list: if isHR() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create: if isHR() && isValidId(recordId) && incoming().keys().hasAll(['employeeId', 'timestamp', 'type']) && incoming().employeeId is string && incoming().type in ['In', 'Out'];
+      allow update: if isHR() && isValidId(recordId) && incoming().keys().hasAll(['employeeId', 'timestamp', 'type']);
+      allow delete: if isAdmin() && isValidId(recordId);
+    }
+
+    // Devices & Shifts
+    match /attendanceDevices/{deviceId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isHR() && isValidId(deviceId) && incoming().keys().hasAll(['name', 'ipAddress', 'port', 'status']);
+      allow delete: if isAdmin();
+    }
+    match /attendanceShifts/{shiftId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isHR() && isValidId(shiftId) && incoming().keys().hasAll(['name', 'startTime', 'endTime', 'graceMinutes', 'workDays']);
+      allow delete: if isAdmin();
+    }
+    
+    // Absence
+    match /absenceTypes/{typeId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isHR() && isValidId(typeId) && incoming().keys().hasAll(['name', 'deductionRatio']);
+      allow delete: if isAdmin();
+    }
+    match /absenceRecords/{recordId} {
+      allow get: if isSignedIn() && (isHR() || existing().employeeId == request.auth.uid);
+      allow list: if isHR() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create, update: if isHR() && isValidId(recordId) && incoming().keys().hasAll(['employeeId', 'date', 'absenceTypeId']);
+      allow delete: if isAdmin();
+    }
+
+    // Missions
+    match /missionTypes/{typeId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isHR() && isValidId(typeId) && incoming().keys().hasAll(['name']);
+      allow delete: if isAdmin();
+    }
+    match /missions/{missionId} {
+      allow get: if isSignedIn() && (isHR() || existing().employeeId == request.auth.uid);
+      allow list: if isHR() || (isSignedIn() && resource.data.employeeId == request.auth.uid);
+      allow create, update: if isHR() && isValidId(missionId) && incoming().keys().hasAll(['employeeId', 'startDate', 'endDate', 'missionTypeId', 'status']);
+      allow delete: if isAdmin();
+    }
+
+    // Projects
+    match /projects/{projectId} {
+      allow get, list: if isSignedIn(); 
+      allow create: if isSignedIn() && isValidId(projectId) && incoming().keys().hasAll(['name', 'clientName', 'status', 'phases']);
+      allow update: if isSignedIn() && isValidId(projectId) && incoming().keys().hasAll(['name', 'clientName', 'status', 'phases']);
+      allow delete: if isAdmin();
+    }
+
+    // Tasks
+    match /projectTasks/{taskId} {
+      allow get: if isSignedIn() && isValidId(taskId) && (isHR() || isAdmin() || existing().assignedToId == request.auth.uid || existing().creatorId == request.auth.uid);
+      allow list: if isSignedIn() && (isHR() || isAdmin() || resource.data.assignedToId == request.auth.uid || resource.data.creatorId == request.auth.uid);
+      allow create: if isSignedIn() && isValidId(taskId) && incoming().keys().hasAll(['projectId', 'title', 'phase', 'status', 'creatorId']) && incoming().creatorId == request.auth.uid;
+      allow update: if isSignedIn() && isValidId(taskId) && incoming().keys().hasAll(['projectId', 'title', 'phase', 'status', 'creatorId']) && (
+        isHR() || isAdmin() || existing().creatorId == request.auth.uid || existing().assignedToId == request.auth.uid 
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Departments
+    match /adminDepartments/{deptId} {
+      allow read, list: if isSignedIn();
+      allow create, update: if isHR() && isValidId(deptId) && incoming().keys().hasAll(['name', 'managerId']);
+      allow delete: if isAdmin();
+    }
+  }
+}

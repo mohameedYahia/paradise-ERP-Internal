@@ -1,0 +1,463 @@
+{
+  "entities": {
+    "AllowanceType": {
+      "title": "AllowanceType",
+      "description": "Types of allowances available for selection",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" }
+      },
+      "required": ["name"]
+    },
+    "AppUser": {
+      "title": "AppUser",
+      "description": "User of the application with specific roles and status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["HR", "Finance", "Admin", "Viewer"] },
+        "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "name", "role", "status"]
+    },
+    "Employee": {
+      "title": "Employee",
+      "description": "Employee basic information and salary structure",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "name": { "type": "string" },
+        "iqamaNumber": { "type": "string" },
+        "officialEmployer": { "type": "string" },
+        "professionAsPerIqama": { "type": "string" },
+        "nationality": { "type": "string" },
+        "jobTitle": { "type": "string" },
+        "joinDate": { "type": "string" },
+        "lastDirectDate": { "type": "string" },
+        "sectorManagement": { "type": "string" },
+        "sectors": { "type": "string" },
+        "costCenterMain": { "type": "string" },
+        "costCenterDept": { "type": "string" },
+        "location": { "type": "string" },
+        "bankAccount": { "type": "string" },
+        "bankCode": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["Bank", "Cash"] },
+        "basicSalary": { "type": "number" },
+        "housingAllowance": { "type": "number" },
+        "transportAllowance": { "type": "number" },
+        "subsistenceAllowance": { "type": "number" },
+        "otherAllowances": { "type": "number" },
+        "mobileAllowance": { "type": "number" },
+        "managementAllowance": { "type": "number" },
+        "dailyWorkHours": { "type": "number" },
+        "status": { "type": "string", "enum": ["Active", "Inactive", "End of Service", "Leave"] },
+        "allowances": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "amount": { "type": "number" }
+            }
+          }
+        },
+        "role": { "type": "string", "enum": ["HR", "Finance", "Admin", "Viewer"] },
+        "email": { "type": "string" },
+        "shiftId": { "type": "string" },
+        "managerId": { "type": "string" },
+        "departmentId": { "type": "string" }
+      },
+      "required": ["employeeId", "name", "iqamaNumber", "status", "basicSalary", "paymentMethod"]
+    },
+    "Transaction": {
+      "title": "Monthly Transaction",
+      "description": "Monthly employee transactions and movements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "month": { "type": "string" },
+        "actualWorkDays": { "type": "number" },
+        "basicSalary": { "type": "number" },
+        "housingAllowance": { "type": "number" },
+        "transportAllowance": { "type": "number" },
+        "subsistenceAllowance": { "type": "number" },
+        "otherAllowances": { "type": "number" },
+        "mobileAllowance": { "type": "number" },
+        "managementAllowance": { "type": "number" },
+        "otherIncome": { "type": "number" },
+        "overtimeHours": { "type": "number" },
+        "overtimeValue": { "type": "number" },
+        "totalIncome": { "type": "number" },
+        "socialInsurance": { "type": "number" },
+        "salaryReceived": { "type": "number" },
+        "loans": { "type": "number" },
+        "bankReceived": { "type": "number" },
+        "otherDeductions": { "type": "number" },
+        "deductionHours": { "type": "number" },
+        "departureDelayDeduction": { "type": "number" },
+        "absenceDays": { "type": "number" },
+        "absenceDeduction": { "type": "number" },
+        "totalDeductions": { "type": "number" },
+        "netSalary": { "type": "number" },
+        "status": { "type": "string" },
+        "salaryIncrease": { "type": "number" },
+        "notes": { "type": "string" },
+        "dailyWorkHours": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["employeeId", "month"]
+    },
+    "PayrollRun": {
+      "title": "Payroll Run",
+      "description": "A monthly payroll batch and its workflow status",
+      "type": "object",
+      "properties": {
+        "month": { "type": "string" },
+        "status": { "type": "string", "enum": ["Draft", "Submitted", "Under Review", "Approved", "Locked"] },
+        "totalNet": { "type": "number" },
+        "employeeCount": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["month", "status"]
+    },
+    "PayrollResult": {
+      "title": "Payroll Result",
+      "description": "Calculated salary for a specific employee in a specific run",
+      "type": "object",
+      "properties": {
+        "payrollRunId": { "type": "string" },
+        "employeeId": { "type": "string" },
+        "employeeName": { "type": "string" },
+        "iqamaNumber": { "type": "string" },
+        "officialEmployer": { "type": "string" },
+        "location": { "type": "string" },
+        "paymentMethod": { "type": "string", "enum": ["Bank", "Cash"] },
+        "bankAccount": { "type": "string" },
+        "bankCode": { "type": "string" },
+        "basicSalary": { "type": "number" },
+        "housingAllowance": { "type": "number" },
+        "grossBase": { "type": "number" },
+        "totalIncome": { "type": "number" },
+        "overtimeValue": { "type": "number" },
+        "absenceDeduction": { "type": "number" },
+        "totalDeductions": { "type": "number" },
+        "salaryReceived": { "type": "number" },
+        "bankReceived": { "type": "number" },
+        "otherEarnings": { "type": "number" },
+        "bankExportAmount": { "type": "number" },
+        "cashExportAmount": { "type": "number" },
+        "netSalary": { "type": "number" },
+        "adjustments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": { "type": "string" },
+              "amount": { "type": "number" }
+            }
+          }
+        }
+      },
+      "required": ["payrollRunId", "employeeId", "netSalary"]
+    },
+    "AttendanceRecord": {
+      "title": "AttendanceRecord",
+      "description": "Log entry for employee attendance",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "type": { "type": "string", "enum": ["In", "Out"] },
+        "deviceId": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "manual": { "type": "boolean" },
+        "note": { "type": "string" }
+      },
+      "required": ["employeeId", "timestamp", "type"]
+    },
+    "AttendanceDevice": {
+      "title": "AttendanceDevice",
+      "description": "Biometric fingerprint device configuration",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ipAddress": { "type": "string" },
+        "port": { "type": "integer" },
+        "lastSync": { "type": "string", "format": "date-time" },
+        "status": { "type": "string", "enum": ["Online", "Offline", "Syncing"] }
+      },
+      "required": ["name", "ipAddress", "port", "status"]
+    },
+    "AttendanceShift": {
+      "title": "AttendanceShift",
+      "description": "Work shift schedule configuration",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "startTime": { "type": "string" },
+        "endTime": { "type": "string" },
+        "graceMinutes": { "type": "integer" },
+        "workDays": { "type": "array", "items": { "type": "integer" } }
+      },
+      "required": ["name", "startTime", "endTime", "graceMinutes", "workDays"]
+    },
+    "AbsenceType": {
+      "title": "AbsenceType",
+      "description": "Types of absences with induction ratios",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "deductionRatio": { "type": "number" }
+      },
+      "required": ["name", "deductionRatio"]
+    },
+    "AbsenceRecord": {
+      "title": "AbsenceRecord",
+      "description": "Log entry for employee absences",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "date": { "type": "string" },
+        "absenceTypeId": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "required": ["employeeId", "date", "absenceTypeId"]
+    },
+    "MissionAllowance": {
+      "title": "MissionAllowance",
+      "description": "Individual allowance component for a mission (e.g. transport, meal)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "amount": { "type": "number" },
+        "type": { "type": "string", "enum": ["Daily", "Once"] }
+      },
+      "required": ["name", "amount", "type"]
+    },
+    "MissionType": {
+      "title": "MissionType",
+      "description": "Types of business trips with default allowance components",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "allowanceAmount": { "type": "number" },
+        "allowances": {
+          "type": "array",
+          "items": { "$ref": "#/entities/MissionAllowance" }
+        }
+      },
+      "required": ["name"]
+    },
+    "Mission": {
+      "title": "Mission",
+      "description": "Employee business trip (مامورية) records",
+      "type": "object",
+      "properties": {
+        "employeeId": { "type": "string" },
+        "projectId": { "type": "string", "description": "ID of the project this mission belongs to" },
+        "startDate": { "type": "string" },
+        "endDate": { "type": "string" },
+        "missionTypeId": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "notes": { "type": "string" },
+        "allowances": {
+          "type": "array",
+          "items": { "$ref": "#/entities/MissionAllowance" }
+        }
+      },
+      "required": ["employeeId", "startDate", "endDate", "missionTypeId", "status"]
+    },
+    "Project": {
+      "title": "Project",
+      "description": "Software development project managed by the operations team",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "clientName": { "type": "string" },
+        "description": { "type": "string" },
+        "details": { "type": "string", "description": "Additional project details" },
+        "projectManagerId": { "type": "string" },
+        "teamLeaderId": { "type": "string" },
+        "consultantTlId": { "type": "string" },
+        "developerTlId": { "type": "string" },
+        "phases": { "type": "array", "items": { "type": "string" } },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "status": { "type": "string", "enum": ["Active", "Completed", "On Hold"] },
+        "chat": {
+          "type": "array",
+          "items": { "$ref": "#/entities/TaskChatMessage" }
+        },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "clientName", "status", "phases"]
+    },
+    "TaskChatMessage": {
+      "title": "TaskChatMessage",
+      "description": "A message in a task or project chat",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "text": { "type": "string" },
+        "mentions": { "type": "array", "items": { "type": "string" } },
+        "createdAt": { "type": "string" }
+      }
+    },
+    "ProjectTask": {
+      "title": "ProjectTask",
+      "description": "A specific task or step within a project workflow phase",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "projectId": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "phase": { "type": "string" },
+        "subPhase": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "In Progress", "Under Review", "Approved", "Rejected", "Testing", "Executed"] },
+        "creatorId": { "type": "string" },
+        "assignedToId": { "type": "string" },
+        "startDate": { "type": "string", "format": "date" },
+        "endDate": { "type": "string", "format": "date" },
+        "estimatedHours": { "type": "number" },
+        "subTasks": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "title": { "type": "string" },
+              "status": { "type": "string", "enum": ["Pending", "Completed"] }
+            }
+          }
+        },
+        "attachments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": { "type": "string" },
+              "url": { "type": "string" },
+              "uploadedBy": { "type": "string" },
+              "timestamp": { "type": "string" },
+              "source": { "type": "string", "enum": ["Firebase", "GoogleDrive"] },
+              "externalId": { "type": "string" }
+            }
+          }
+        },
+        "comments": {
+          "type": "array",
+          "items": { "$ref": "#/entities/TaskChatMessage" }
+        },
+        "workflowLog": {
+          "type": "array",
+          "items": {
+             "type": "object",
+             "properties": {
+               "fromStatus": { "type": "string" },
+               "toStatus": { "type": "string" },
+               "userId": { "type": "string" },
+               "userName": { "type": "string" },
+               "timestamp": { "type": "string" },
+               "note": { "type": "string" }
+             }
+          }
+        },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["projectId", "title", "phase", "status", "creatorId"]
+    },
+    "AdministrativeDepartment": {
+      "title": "AdministrativeDepartment",
+      "description": "Organizational unit or department within the institution",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "managerId": { "type": "string" },
+        "parentDeptId": { "type": "string" }
+      },
+      "required": ["name", "managerId"]
+    }
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "AppUser",
+      "description": "Application users and roles"
+    },
+    "/employees/{employeeId}": {
+      "schema": "Employee",
+      "description": "Employee database"
+    },
+    "/allowanceTypes/{typeId}": {
+      "schema": "AllowanceType",
+      "description": "Available allowance types"
+    },
+    "/transactions/{transactionId}": {
+      "schema": "Transaction",
+      "description": "Monthly transactions for payroll calculation"
+    },
+    "/payrollRuns/{runId}": {
+      "schema": "PayrollRun",
+      "description": "Payroll execution periods"
+    },
+    "/payrollResults/{resultId}": {
+      "schema": "PayrollResult",
+      "description": "Calculated results per employee for a payroll run"
+    },
+    "/attendanceRecords/{recordId}": {
+      "schema": "AttendanceRecord",
+      "description": "Daily employee attendance logs"
+    },
+    "/attendanceDevices/{deviceId}": {
+      "schema": "AttendanceDevice",
+      "description": "Configured biometric fingerprint devices"
+    },
+    "/attendanceShifts/{shiftId}": {
+      "schema": "AttendanceShift",
+      "description": "Defined work shifts and timings"
+    },
+    "/absenceTypes/{typeId}": {
+      "schema": "AbsenceType",
+      "description": "Defined types of absences"
+    },
+    "/absenceRecords/{recordId}": {
+      "schema": "AbsenceRecord",
+      "description": "Employee absence records"
+    },
+    "/missionTypes/{typeId}": {
+      "schema": "MissionType",
+      "description": "Defined types of business trips"
+    },
+    "/missions/{missionId}": {
+      "schema": "Mission",
+      "description": "Employee business trip records"
+    },
+    "/projects/{projectId}": {
+      "schema": "Project",
+      "description": "Company software projects"
+    },
+    "/projectTasks/{taskId}": {
+      "schema": "ProjectTask",
+      "description": "Tasks and workflow steps per project"
+    },
+    "/adminDepartments/{deptId}": {
+      "schema": "AdministrativeDepartment",
+      "description": "Administrative divisions of the company"
+    }
+  }
+}
