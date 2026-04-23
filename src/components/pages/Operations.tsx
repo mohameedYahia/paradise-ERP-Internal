@@ -86,9 +86,15 @@ export const Operations: React.FC = () => {
 
       let data;
       try {
-        data = await response.json();
-      } catch (err) {
-        throw new Error("Server returned an invalid response. The connection might have been interrupted or the file is too large.");
+        const text = await response.text();
+        try {
+          data = JSON.parse(text);
+        } catch (jsonErr) {
+          console.error("Failed to parse JSON on 200 OK. Original response text:", text.substring(0, 500));
+          throw new Error("Server returned an invalid response format (not JSON). Check console for details.");
+        }
+      } catch (err: any) {
+        throw new Error(err.message || "Server returned an invalid response. The connection might have been interrupted or the file is too large.");
       }
 
       const newAttachment = {

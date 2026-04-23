@@ -8,47 +8,113 @@ import {
   Trash2, 
   Mail,
   ShieldAlert,
+  Edit,
+  Settings,
   X as CloseIcon
 } from 'lucide-react';
 import { db, collection, setDoc, doc, deleteDoc, OperationType, handleFirestoreError } from '../../firebase';
 import { useData } from '../../contexts/DataContext';
-import { AppUser, UserRole } from '../../types';
+import { AppUser, UserRole, PermissionConfig, ScreenActionConfig } from '../../types';
 import { cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const AVAILABLE_SCREENS = [
+  { id: 'dashboard_ops', name: 'لوحة تحكم التشغيل' },
+  { id: 'my-tasks', name: 'مهامي الشخصية' },
+  { id: 'operations', name: 'إدارة العمليات' },
+  { id: 'dashboard_hr', name: 'لوحة تحكم الموارد البشرية' },
+  { id: 'adminStructure', name: 'الهيكل الإداري' },
+  { id: 'employees', name: 'الموظفين' },
+  { id: 'orgChart', name: 'الهيكل التنظيمي' },
+  { id: 'attendance', name: 'الحضور والانصراف' },
+  { id: 'missions', name: 'المهام والإجازات' },
+  { id: 'dashboard_payroll', name: 'لوحة تحكم الرواتب' },
+  { id: 'allowanceTypes', name: 'أنواع البدلات' },
+  { id: 'transactions', name: 'الحركات الشهرية' },
+  { id: 'payroll', name: 'مسيرات الرواتب' },
+  { id: 'settlements', name: 'تصفية البيانات والتسويات' },
+  { id: 'users', name: 'إدارة المستخدمين' }
+];
+
 export const UsersManagement: React.FC = () => {
-  const { appUsers: users } = useData();
+  const { appUsers: users, adminDepartments } = useData();
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, show: boolean }>({ id: '', show: false });
-  
+  const [showAdvancedPerms, setShowAdvancedPerms] = useState(false);
+
   const [formData, setFormData] = useState<Omit<AppUser, 'id' | 'createdAt'>>({
     email: '',
     name: '',
     role: 'Viewer',
-    status: 'Active'
+    status: 'Active',
+    permissions: {
+      screens: {},
+      departments: []
+    }
   });
+
+  const openAddModal = () => {
+    setEditingUserId(null);
+    setFormData({
+      email: '', name: '', role: 'Viewer', status: 'Active', permissions: { screens: {}, departments: [] }
+    });
+    setShowAdvancedPerms(false);
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (u: AppUser) => {
+    setEditingUserId(u.id);
+    setFormData({
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      status: u.status,
+      permissions: u.permissions || { screens: {}, departments: [] }
+    });
+    setShowAdvancedPerms(false);
+    setIsModalOpen(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.email.trim()) return;
 
-    // Use email as ID
-    const id = formData.email.toLowerCase();
+    const id = editingUserId || formData.email.toLowerCase();
     
     await setDoc(doc(db, 'users', id), {
       ...formData,
       email: formData.email.toLowerCase(),
-      createdAt: new Date().toISOString()
+      createdAt: editingUserId ? (users.find(u => u.id === id)?.createdAt || new Date().toISOString()) : new Date().toISOString()
     });
 
     setIsModalOpen(false);
-    setFormData({ email: '', name: '', role: 'Viewer', status: 'Active' });
   };
 
   const handleDelete = async (id: string) => {
     await deleteDoc(doc(db, 'users', id));
     setDeleteConfirm({ id: '', show: false });
+  };
+
+  const toggleScreenPerm = (screenId: string, perm: keyof ScreenActionConfig) => {
+    setFormData(prev => {
+      const screens = { ...prev.permissions?.screens };
+      if (!screens[screenId]) screens[screenId] = { view: false, create: false, edit: false, delete: false, export: false };
+      screens[screenId] = { ...screens[screenId], [perm]: !screens[screenId][perm] };
+      return { ...prev, permissions: { ...prev.permissions, screens } };
+    });
+  };
+
+  const toggleDepartment = (deptId: string) => {
+    setFormData(prev => {
+      const perms = prev.permissions || { departments: [] };
+      const selected = perms.departments || [];
+      const newSelected = selected.includes(deptId) 
+        ? selected.filter(id => id !== deptId)
+        : [...selected, deptId];
+      return { ...prev, permissions: { ...perms, departments: newSelected } };
+    });
   };
 
   const filteredUsers = useMemo(() => {
@@ -82,7 +148,7 @@ export const UsersManagement: React.FC = () => {
           />
         </div>
         <button 
-          onClick={() => setIsModalOpen(true)}
+          onClick={openAddModal}
           className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-200"
         >
           <Plus className="w-5 h-5" />
@@ -106,6 +172,13 @@ export const UsersManagement: React.FC = () => {
                     {(u.name || 'U')[0].toUpperCase()}
                   </div>
               <div className="flex gap-2">
+                <button 
+                  onClick={() => openEditModal(u)}
+                  className="p-2 text-blue-400 hover:bg-blue-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
+                  title="تعديل المستخدم"
+                >
+                  <Edit className="w-5 h-5" />
+                </button>
                 <button 
                   onClick={() => setDeleteConfirm({ id: u.id, show: true })}
                   className="p-2 text-red-400 hover:bg-red-50 rounded-xl transition-colors opacity-0 group-hover:opacity-100"
@@ -143,7 +216,7 @@ export const UsersManagement: React.FC = () => {
         ))}
       </div>
 
-      {/* Add User Modal */}
+      {/* Add/Edit User Modal */}
       <AnimatePresence>
         {isModalOpen && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -158,64 +231,162 @@ export const UsersManagement: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="relative bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden"
+              className={cn("relative bg-white w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]", showAdvancedPerms ? "max-w-4xl rounded-2xl" : "max-w-md rounded-[2.5rem]")}
             >
-              <div className="p-8 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
-                <h3 className="text-2xl font-black text-gray-900">إضافة مستخدم</h3>
+              <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
+                <h3 className="text-xl font-black text-gray-900">{editingUserId ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white rounded-xl transition-colors">
-                  <CloseIcon className="w-6 h-6 text-gray-400" />
+                  <CloseIcon className="w-5 h-5 text-gray-400" />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-8 space-y-6">
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">الاسم الكامل</label>
-                    <input 
-                      required
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.name || ''}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                    />
+              <form onSubmit={handleSubmit} className="flex flex-col md:flex-row flex-1 overflow-hidden">
+                <div className="p-6 space-y-6 w-full md:w-96 shrink-0 overflow-y-auto border-l border-gray-100 bg-white">
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-500 mr-2">الاسم الكامل</label>
+                      <input 
+                        required
+                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-800"
+                        value={formData.name || ''}
+                        onChange={(e) => setFormData({...formData, name: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-500 mr-2">البريد الإلكتروني</label>
+                      <input 
+                        type="email"
+                        required
+                        readOnly={!!editingUserId} // Don't allow email change for existing
+                        className={cn("w-full px-5 py-3 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-800", editingUserId ? "bg-gray-100 text-gray-500" : "bg-gray-50")}
+                        value={formData.email || ''}
+                        onChange={(e) => setFormData({...formData, email: e.target.value})}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-500 mr-2">مجموعة الصلاحيات العامة (الرتبة)</label>
+                      <select 
+                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-800"
+                        value={formData.role}
+                        onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
+                      >
+                        <option value="Viewer">مشاهد</option>
+                        <option value="HR">موارد بشرية</option>
+                        <option value="Finance">مالية</option>
+                        <option value="Admin">مدير نظام</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="text-sm font-bold text-gray-500 mr-2">حالة الحساب</label>
+                      <select 
+                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-800"
+                        value={formData.status}
+                        onChange={(e) => setFormData({...formData, status: e.target.value as any})}
+                      >
+                        <option value="Active">نشط</option>
+                        <option value="Inactive">معطل</option>
+                      </select>
+                    </div>
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">البريد الإلكتروني</label>
-                    <input 
-                      type="email"
-                      required
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.email || ''}
-                      onChange={(e) => setFormData({...formData, email: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">الصلاحية</label>
-                    <select 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.role}
-                      onChange={(e) => setFormData({...formData, role: e.target.value as UserRole})}
+
+                  {!showAdvancedPerms && (
+                    <button 
+                      type="button"
+                      onClick={() => setShowAdvancedPerms(true)}
+                      className="w-full mt-6 py-3 border-2 border-dashed border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-2xl font-bold transition-colors flex items-center justify-center gap-2"
                     >
-                      <option value="Viewer">مشاهد</option>
-                      <option value="HR">موارد بشرية</option>
-                      <option value="Finance">مالية</option>
-                      <option value="Admin">مدير نظام</option>
-                    </select>
+                      <Settings className="w-4 h-4" />
+                      خيارات الصلاحيات المتقدمة
+                    </button>
+                  )}
+
+                  <div className="pt-6 mt-6 border-t border-gray-100">
+                    <button 
+                      type="submit"
+                      className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-200"
+                    >
+                      {editingUserId ? 'حفظ التعديلات' : 'إضافة المستخدم'}
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-4 pt-4">
-                  <button 
-                    type="submit"
-                    className="flex-1 py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-200"
-                  >
-                    إضافة المستخدم
-                  </button>
-                </div>
+
+                {/* Advanced Permissions Panel */}
+                {showAdvancedPerms && (
+                  <div className="flex-1 bg-gray-50 p-6 overflow-y-auto min-w-[500px]">
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="text-xl font-black text-gray-800 flex items-center gap-2">
+                        <Shield className="w-5 h-5 text-blue-600" />
+                        الصلاحيات المخصصة
+                      </h4>
+                    </div>
+
+                    {/* Department Level Permissions */}
+                    <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100 mb-6">
+                      <h5 className="font-bold text-gray-800 mb-4 text-sm">أذونات الإدارات (Departments Access)</h5>
+                      <p className="text-xs text-gray-500 mb-4">في حال عدم تحديد أي إدارة، يعتبر المستخدم مفوضاً لرؤية كافة الإدارات.</p>
+                      <div className="flex flex-wrap gap-2">
+                        {adminDepartments.map(dept => {
+                          const isSelected = formData.permissions?.departments?.includes(dept.id);
+                          return (
+                            <button
+                              key={dept.id}
+                              type="button"
+                              onClick={() => toggleDepartment(dept.id)}
+                              className={cn(
+                                "px-3 py-1.5 rounded-lg text-xs font-bold transition-all border",
+                                isSelected ? "bg-blue-50 border-blue-200 text-blue-700" : "bg-white border-gray-200 text-gray-500 hover:border-blue-300"
+                              )}
+                            >
+                              {dept.name}
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Screen Actions Table */}
+                    <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                      <table className="w-full text-right text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 font-bold text-gray-600 border-b border-gray-100">الشاشة</th>
+                            <th className="px-2 py-3 font-bold text-gray-500 border-b border-gray-100 text-center">عرض</th>
+                            <th className="px-2 py-3 font-bold text-gray-500 border-b border-gray-100 text-center">إضافة</th>
+                            <th className="px-2 py-3 font-bold text-gray-500 border-b border-gray-100 text-center">تعديل</th>
+                            <th className="px-2 py-3 font-bold text-gray-500 border-b border-gray-100 text-center">حذف</th>
+                            <th className="px-2 py-3 font-bold text-gray-500 border-b border-gray-100 text-center">تصدير</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {AVAILABLE_SCREENS.map(screen => {
+                            const config = formData.permissions?.screens?.[screen.id] || { view: false, create: false, edit: false, delete: false, export: false };
+                            return (
+                              <tr key={screen.id} className="hover:bg-gray-50/50">
+                                <td className="px-4 py-3 font-bold text-gray-800">{screen.name}</td>
+                                {(Object.keys(config) as Array<keyof ScreenActionConfig>).map(action => (
+                                  <td key={action} className="px-2 py-3 text-center">
+                                    <input 
+                                      type="checkbox"
+                                      className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 cursor-pointer"
+                                      checked={config[action]}
+                                      onChange={() => toggleScreenPerm(screen.id, action)}
+                                    />
+                                  </td>
+                                ))}
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* Delete Confirmation */}
+      {/* Delete Confirmation Modal... */}
       <AnimatePresence>
         {deleteConfirm.show && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">

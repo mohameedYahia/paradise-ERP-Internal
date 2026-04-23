@@ -21,48 +21,33 @@ export const Settlements: React.FC = () => {
   const { employees } = useData();
   const [filters, setFilters] = useState({
     searchTerm: '',
-    officialEmployer: 'all',
     nationality: 'all',
-    location: 'all',
-    sector: 'all', // Sector Management
+    workType: 'all',
     status: 'all',
     paymentMethod: 'all',
-    jobTitle: 'all',
-    costCenterMain: 'all',
-    costCenterDept: 'all',
-    sectors: 'all'
+    jobTitle: 'all'
   });
 
   const filterOptions = useMemo(() => {
-    const employers = Array.from(new Set(employees.map(e => e.officialEmployer).filter(Boolean)));
     const nationalities = Array.from(new Set(employees.map(e => e.nationality).filter(Boolean)));
-    const locations = Array.from(new Set(employees.map(e => e.location).filter(Boolean)));
-    const sectors = Array.from(new Set(employees.map(e => e.sectorManagement).filter(Boolean)));
+    const workTypes = Array.from(new Set(employees.map(e => e.workType).filter(Boolean)));
     const jobs = Array.from(new Set(employees.map(e => e.jobTitle).filter(Boolean)));
-    const costCenterMains = Array.from(new Set(employees.map(e => e.costCenterMain).filter(Boolean)));
-    const costCenterDepts = Array.from(new Set(employees.map(e => e.costCenterDept).filter(Boolean)));
-    const sectors_multi = Array.from(new Set(employees.map(e => e.sectors).filter(Boolean)));
     
-    return { employers, nationalities, locations, sectors, jobs, costCenterMains, costCenterDepts, sectors_multi };
+    return { nationalities, workTypes, jobs };
   }, [employees]);
 
   const filteredData = useMemo(() => {
     return employees.filter(e => {
       const matchSearch = (e.name || '').toLowerCase().includes(filters.searchTerm.toLowerCase()) || 
                           (e.employeeId || '').includes(filters.searchTerm);
-      const matchEmployer = filters.officialEmployer === 'all' || e.officialEmployer === filters.officialEmployer;
       const matchNationality = filters.nationality === 'all' || e.nationality === filters.nationality;
-      const matchLocation = filters.location === 'all' || e.location === filters.location;
-      const matchSector = filters.sector === 'all' || e.sectorManagement === filters.sector;
+      const matchWorkType = filters.workType === 'all' || e.workType === filters.workType;
       const matchStatus = filters.status === 'all' || e.status === filters.status;
       const matchMethod = filters.paymentMethod === 'all' || e.paymentMethod === filters.paymentMethod;
       const matchJob = filters.jobTitle === 'all' || e.jobTitle === filters.jobTitle;
-      const matchCCMain = filters.costCenterMain === 'all' || e.costCenterMain === filters.costCenterMain;
-      const matchCCDept = filters.costCenterDept === 'all' || e.costCenterDept === filters.costCenterDept;
-      const matchSectors = filters.sectors === 'all' || e.sectors === filters.sectors;
 
-      return matchSearch && matchEmployer && matchNationality && matchLocation && matchSector && 
-             matchStatus && matchMethod && matchJob && matchCCMain && matchCCDept && matchSectors;
+      return matchSearch && matchNationality && matchWorkType && 
+             matchStatus && matchMethod && matchJob;
     });
   }, [employees, filters]);
 
@@ -93,10 +78,9 @@ export const Settlements: React.FC = () => {
       return {
         'الرقم الوظيفي': e.employeeId,
         'الاسم': e.name,
-        'صاحب العمل الرسمي': e.officialEmployer,
         'الجنسية': e.nationality,
-        'الوظيفة': e.jobTitle,
-        'الموقع': e.location,
+        'المسمى الوظيفي': e.jobTitle,
+        'نوع الدوام': e.workType === 'Part time' ? 'دوام جزئي' : 'تفرغ كامل',
         'الحالة': e.status === 'Active' ? 'نشط' : e.status === 'End of Service' ? 'إنهاء خدمات' : e.status === 'Leave' ? 'إجازة' : 'غير نشط',
         'طريقة الاستلام': e.paymentMethod === 'Bank' ? 'بنك' : 'نقدي',
         'الراتب الأساسي': e.basicSalary,
@@ -149,20 +133,6 @@ export const Settlements: React.FC = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Building2 className="w-3 h-3" /> صاحب العمل
-            </label>
-            <select 
-              className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.officialEmployer}
-              onChange={(e) => setFilters({...filters, officialEmployer: e.target.value})}
-            >
-              <option value="all">الكل</option>
-              {filterOptions.employers.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
               <Globe className="w-3 h-3" /> الجنسية
             </label>
             <select 
@@ -177,77 +147,21 @@ export const Settlements: React.FC = () => {
 
           <div className="space-y-2">
             <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Building2 className="w-3 h-3" /> مركز التكلفة / رئيسي
+              <MapPin className="w-3 h-3" /> نوع الدوام
             </label>
             <select 
               className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.costCenterMain}
-              onChange={(e) => setFilters({...filters, costCenterMain: e.target.value})}
+              value={filters.workType}
+              onChange={(e) => setFilters({...filters, workType: e.target.value})}
             >
               <option value="all">الكل</option>
-              {filterOptions.costCenterMains.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+              {filterOptions.workTypes.map(opt => <option key={opt} value={opt}>{opt === 'Part time' ? 'دوام جزئي' : 'تفرغ كامل'}</option>)}
             </select>
           </div>
 
           <div className="space-y-2">
             <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Building2 className="w-3 h-3" /> مركز التكلفة / قسم
-            </label>
-            <select 
-              className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.costCenterDept}
-              onChange={(e) => setFilters({...filters, costCenterDept: e.target.value})}
-            >
-              <option value="all">الكل</option>
-              {filterOptions.costCenterDepts.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <MapPin className="w-3 h-3" /> الموقع
-            </label>
-            <select 
-              className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.location}
-              onChange={(e) => setFilters({...filters, location: e.target.value})}
-            >
-              <option value="all">الكل</option>
-              {filterOptions.locations.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Briefcase className="w-3 h-3" /> القطاعات
-            </label>
-            <select 
-              className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.sectors}
-              onChange={(e) => setFilters({...filters, sectors: e.target.value})}
-            >
-              <option value="all">الكل</option>
-              {filterOptions.sectors_multi.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Briefcase className="w-3 h-3" /> إدارة القطاع
-            </label>
-            <select 
-              className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
-              value={filters.sector}
-              onChange={(e) => setFilters({...filters, sector: e.target.value})}
-            >
-              <option value="all">الكل</option>
-              {filterOptions.sectors.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-400 mr-2 flex items-center gap-2">
-              <Briefcase className="w-3 h-3" /> الوظيفة
+              <Briefcase className="w-3 h-3" /> المسمى الوظيفي
             </label>
             <select 
               className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-600"
@@ -295,16 +209,11 @@ export const Settlements: React.FC = () => {
             <button 
               onClick={() => setFilters({
                 searchTerm: '',
-                officialEmployer: 'all',
                 nationality: 'all',
-                location: 'all',
-                sector: 'all',
+                workType: 'all',
                 status: 'all',
                 paymentMethod: 'all',
-                jobTitle: 'all',
-                costCenterMain: 'all',
-                costCenterDept: 'all',
-                sectors: 'all'
+                jobTitle: 'all'
               })}
               className="text-sm font-black text-blue-600 hover:text-blue-700 p-3 h-12 flex items-center gap-2"
             >
@@ -352,8 +261,8 @@ export const Settlements: React.FC = () => {
           <thead>
             <tr className="bg-gray-50/50 border-b border-gray-100">
               <th className="px-8 py-5 text-sm font-black text-gray-500">الموظف</th>
-              <th className="px-8 py-5 text-sm font-black text-gray-500">صاحب العمل</th>
-              <th className="px-8 py-5 text-sm font-black text-gray-500">الموقع</th>
+              <th className="px-8 py-5 text-sm font-black text-gray-500">نوع الدوام</th>
+              <th className="px-8 py-5 text-sm font-black text-gray-500">المسمى الوظيفي</th>
               <th className="px-8 py-5 text-sm font-black text-gray-500">الحالة</th>
               <th className="px-8 py-5 text-sm font-black text-gray-500">الأساسي</th>
               <th className="px-8 py-5 text-sm font-black text-gray-500">البدلات</th>
@@ -379,10 +288,10 @@ export const Settlements: React.FC = () => {
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-sm font-bold text-gray-600">{e.officialEmployer}</span>
+                    <span className="text-sm font-bold text-gray-600">{e.workType === 'Part time' ? 'دوام جزئي' : 'تفرغ كامل'}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <span className="text-sm font-bold text-gray-600">{e.location}</span>
+                    <span className="text-sm font-bold text-gray-600">{e.jobTitle || 'غير محدد'}</span>
                   </td>
                   <td className="px-8 py-5">
                     <span className={cn(

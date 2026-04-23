@@ -137,12 +137,11 @@ export const PayrollRuns: React.FC = () => {
         payrollRunId: runId,
         employeeId: emp.employeeId || emp.id,
         employeeName: emp.name,
-        iqamaNumber: emp.iqamaNumber,
-        officialEmployer: emp.officialEmployer,
-        location: emp.location,
+        iqamaNumber: emp.iqamaNumber || '',
+        workType: emp.workType || 'Full time',
         paymentMethod: emp.paymentMethod,
-        bankAccount: emp.bankAccount,
-        bankCode: emp.bankCode,
+        bankAccount: emp.bankAccount || '',
+        bankCode: emp.bankCode || '',
 
         basicSalary: details.basicSalary,
         housingAllowance: details.housingAllowance,
@@ -193,8 +192,7 @@ export const PayrollRuns: React.FC = () => {
       'الرقم الوظيفي': r.employeeId,
       'اسم الموظف': r.employeeName,
       'الرقم القومي': r.iqamaNumber || '',
-      'صاحب العمل الرسمي': r.officialEmployer || '',
-      'الموقع': r.location || '',
+      'نوع الدوام': r.workType === 'Part time' ? 'دوام جزئي' : 'تفرغ كامل',
       'طريقة الصرف': r.paymentMethod === 'Bank' ? 'بنك' : 'كاش',
       'الحساب البنكي': r.bankAccount || '',
       'كود البنك': r.bankCode || '',
@@ -209,7 +207,7 @@ export const PayrollRuns: React.FC = () => {
 
     // 2. Summary by Entity
     const entitySummaryMap = results.reduce((acc: any, curr) => {
-      const entity = curr.officialEmployer || 'غير محدد';
+      const entity = 'كافة الموظفين'; // Simplified due to removal of officialEmployer
       acc[entity] = (acc[entity] || 0) + curr.bankExportAmount + curr.cashExportAmount;
       return acc;
     }, {});

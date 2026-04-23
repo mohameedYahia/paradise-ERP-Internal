@@ -26,13 +26,10 @@ async function startServer() {
   app.post("/api/upload", (req, res, next) => {
     upload.single("file")(req, res, (err) => {
       if (err instanceof multer.MulterError) {
-        // A Multer error occurred when uploading (e.g., file too large)
         return res.status(400).json({ error: `Upload Error (Multer): ${err.message}` });
       } else if (err) {
-        // An unknown error occurred when uploading
         return res.status(500).json({ error: `Server Error (Upload): ${err.message}` });
       }
-      // Everything went fine, proceed to the route handler
       next();
     });
   }, async (req, res) => {
@@ -100,6 +97,7 @@ async function startServer() {
         requestBody: fileMetadata,
         media: media,
         fields: "id, webViewLink, webContentLink",
+        supportsAllDrives: true,
       });
 
       // Clean up the temporary file from disk
@@ -111,13 +109,19 @@ async function startServer() {
 
       if (fileId) {
         // Set permissions so anyone with the link can view
-        await drive.permissions.create({
-          fileId: fileId,
-          requestBody: {
-            role: "reader",
-            type: "anyone",
-          },
-        });
+        try {
+          await drive.permissions.create({
+            fileId: fileId,
+            supportsAllDrives: true,
+            requestBody: {
+              role: "reader",
+              type: "anyone",
+            },
+          });
+        } catch (permError: any) {
+          console.warn("Could not set 'anyone' permission on Drive file (might be blocked by Workspace sharing policy):", permError.message);
+          // We don't throw here, we still want to return the file link!
+        }
       }
 
       // We prefer webViewLink for viewing in browser, webContentLink for direct download
@@ -133,6 +137,11 @@ async function startServer() {
       }
       res.status(500).json({ error: error.message || "Failed to upload file to Google Drive" });
     }
+  });
+
+  // Catch unmatched API routes so they don't fall through to Vite SPA fallback
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `API Route not found: ${req.method} ${req.path}` });
   });
 
   // Fallback API error handler (prevents Vite from serving HTML on API crashes)

@@ -47,7 +47,17 @@ export const Dashboard: React.FC = () => {
   })), [payrollRuns]);
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 pb-12">
+      <div className="flex items-center gap-4 bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+          <Wallet className="w-8 h-8 text-white" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900">لوحة تحكم الرواتب</h1>
+          <p className="text-gray-500 font-medium">نظرة عامة على الرواتب والحركات المالية</p>
+        </div>
+      </div>
+
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, i) => (

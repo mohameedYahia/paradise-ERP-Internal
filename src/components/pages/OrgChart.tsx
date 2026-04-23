@@ -56,7 +56,7 @@ const EmployeeNode = ({ data }: NodeProps<{ employee: Employee, subordinateCount
         <div className="w-full pt-3 border-t border-gray-50 flex flex-col gap-1.5">
           <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 justify-center">
             <MapPin className="w-2.5 h-2.5" />
-            <span className="truncate">{employee.location || 'غير محدد'}</span>
+            <span className="truncate">{employee.workType === 'Part time' ? 'دوام جزئي' : 'تفرغ كامل'}</span>
           </div>
           {subordinateCount > 0 && (
             <div className="flex items-center gap-1.5 text-[10px] font-black text-blue-500 justify-center mt-1">

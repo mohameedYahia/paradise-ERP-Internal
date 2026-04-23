@@ -19,6 +19,7 @@ import { Employee, Allowance, AllowanceType } from '../../types';
 import { formatCurrency, cn } from '../../lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import * as XLSX from 'xlsx';
+import { usePermissions } from '../../hooks/usePermissions';
 
 export const EmployeesList: React.FC = () => {
   const { employees, allowanceTypes, attendanceShifts, adminDepartments } = useData();
@@ -33,17 +34,10 @@ export const EmployeesList: React.FC = () => {
     employeeId: '',
     name: '',
     iqamaNumber: '',
-    officialEmployer: '',
-    professionAsPerIqama: '',
     nationality: '',
     jobTitle: '',
     joinDate: '',
-    lastDirectDate: '',
-    sectorManagement: '',
-    sectors: '',
-    costCenterMain: '',
-    costCenterDept: '',
-    location: '',
+    workType: 'Full time',
     bankAccount: '',
     bankCode: '',
     basicSalary: 0,
@@ -77,17 +71,10 @@ export const EmployeesList: React.FC = () => {
       employeeId: '',
       name: '',
       iqamaNumber: '',
-      officialEmployer: '',
-      professionAsPerIqama: '',
       nationality: '',
       jobTitle: '',
       joinDate: '',
-      lastDirectDate: '',
-      sectorManagement: '',
-      sectors: '',
-      costCenterMain: '',
-      costCenterDept: '',
-      location: '',
+      workType: 'Full time',
       bankAccount: '',
       bankCode: '',
       basicSalary: 0,
@@ -158,7 +145,6 @@ export const EmployeesList: React.FC = () => {
       'ت': index + 1,
       'رقم الموظف': emp.employeeId || '',
       'الرقم القومي': emp.iqamaNumber || '',
-      'صاحب العمل الرسمي': emp.officialEmployer || '',
       'الراتب الاساسي': emp.basicSalary,
       'بدل سكن': emp.housingAllowance || 0,
       'بدل نقل': emp.transportAllowance || 0,
@@ -170,17 +156,11 @@ export const EmployeesList: React.FC = () => {
       'كود البنك': emp.bankCode || '',
       'ساعات العمل اليومية': emp.dailyWorkHours || 8,
       'طريقة الاستلام': emp.paymentMethod === 'Bank' ? 'استلام بنك' : 'استلام راتب',
-      'المهنة': emp.professionAsPerIqama || '',
       'الإسم': emp.name,
       'الجنسية': emp.nationality || '',
-      'الوظيفة': emp.jobTitle || '',
+      'المسمى الوظيفي': emp.jobTitle || '',
       'بداية العمل': emp.joinDate || '',
-      'آخر مباشرة': emp.lastDirectDate || '',
-      'ادارة القطاع': emp.sectorManagement || '',
-      'القطاعات': emp.sectors || '',
-      'مركز التكلفة / رئيسي': emp.costCenterMain || '',
-      'مركز التكلفة / قسم': emp.costCenterDept || '',
-      'الموقع': emp.location || '',
+      'نوع الدوام': emp.workType || 'Full time',
       'المجموع': emp.basicSalary + (emp.housingAllowance || 0) + (emp.transportAllowance || 0) + 
                  (emp.subsistenceAllowance || 0) + (emp.otherAllowances || 0) + 
                  (emp.mobileAllowance || 0) + (emp.managementAllowance || 0) +
@@ -231,17 +211,10 @@ export const EmployeesList: React.FC = () => {
           employeeId: String(row['رقم الموظف'] || row['الرقم الوظيفي'] || ''),
           name: row['الإسم'] || row['اسم الموظف'] || row['الاسم'] || 'بدون اسم',
           iqamaNumber: String(row['الرقم القومي'] || row['رقم القومي'] || row['رقم الأقامة'] || row['رقم الإقامة'] || ''),
-          officialEmployer: row['صاحب العمل الرسمي'] || '',
-          professionAsPerIqama: row['المهنة'] || row['المهنة حسب الاقامة'] || '',
           nationality: row['الجنسية'] || '',
-          jobTitle: row['الوظيفة'] || '',
+          jobTitle: row['المسمى الوظيفي'] || row['الوظيفة'] || row['المهنة'] || '',
           joinDate: parseExcelDate(row['بداية العمل']),
-          lastDirectDate: parseExcelDate(row['آخر مباشرة']),
-          sectorManagement: row['ادارة القطاع'] || '',
-          sectors: row['القطاعات'] || '',
-          costCenterMain: row['مركز التكلفة / رئيسي'] || '',
-          costCenterDept: row['مركز التكلفة / قسم'] || '',
-          location: row['الموقع'] || '',
+          workType: (row['نوع الدوام'] === 'Part time' || row['نوع الدوام'] === 'دوام جزئي') ? 'Part time' : 'Full time',
           bankAccount: row['الايبــــــــــان'] || row['رقم الحساب (IBAN)'] || '',
           bankCode: row['كود البنك'] || row['البنك'] || '',
           paymentMethod: paymentMethod,
@@ -265,7 +238,10 @@ export const EmployeesList: React.FC = () => {
     reader.readAsBinaryString(file);
   };
 
+  const { canView, canCreate, canEdit, canDelete, canExport, allowedDepartments, isSuperAdmin } = usePermissions();
+
   const handleEdit = (emp: Employee) => {
+    if (!canEdit('employees')) return;
     setEditingEmployee(emp);
     setFormData({ 
       ...emp,
@@ -275,17 +251,27 @@ export const EmployeesList: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
+    if (!canDelete('employees')) return;
     await deleteDoc(doc(db, 'employees', id));
     setDeleteConfirm({ id: '', show: false });
   };
 
   const filteredEmployees = useMemo(() => {
-    return employees.filter(e => 
-      (e.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (e.jobTitle?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-      (e.sectorManagement?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-    );
-  }, [employees, searchTerm]);
+    return employees.filter(e => {
+      // 1. Department filter
+      if (!isSuperAdmin) {
+         if (!allowedDepartments.includes(e.departmentId || '')) {
+             return false;
+         }
+      }
+
+      // 2. Search filter
+      const matchesSearch = (e.name?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
+                            (e.jobTitle?.toLowerCase() || '').includes(searchTerm.toLowerCase());
+      
+      return matchesSearch;
+    });
+  }, [employees, searchTerm, allowedDepartments, isSuperAdmin]);
 
   return (
     <div className="space-y-6">
@@ -302,7 +288,7 @@ export const EmployeesList: React.FC = () => {
           />
         </div>
         <div className="flex items-center gap-3">
-          {selectedIds.length > 0 && (
+          {(selectedIds.length > 0 && canDelete('employees')) && (
             <button 
               onClick={() => setDeleteConfirm({ id: 'bulk', show: true })}
               className="flex items-center gap-2 px-4 py-3 bg-red-50 text-red-600 font-bold rounded-xl hover:bg-red-100 transition-all"
@@ -311,25 +297,31 @@ export const EmployeesList: React.FC = () => {
               <span>حذف المحدد ({selectedIds.length})</span>
             </button>
           )}
-          <label className="cursor-pointer p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2 font-bold">
-            <Upload className="w-5 h-5" />
-            <span className="hidden md:inline">استيراد</span>
-            <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImportExcel} />
-          </label>
-          <button 
-            onClick={handleExportExcel}
-            className="p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2 font-bold"
-          >
-            <Download className="w-5 h-5" />
-            <span className="hidden md:inline">تصدير</span>
-          </button>
-          <button 
-            onClick={() => { setEditingEmployee(null); setIsModalOpen(true); }}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-200"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>إضافة موظف</span>
-          </button>
+          {canCreate('employees') && (
+            <label className="cursor-pointer p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2 font-bold">
+              <Upload className="w-5 h-5" />
+              <span className="hidden md:inline">استيراد</span>
+              <input type="file" className="hidden" accept=".xlsx, .xls" onChange={handleImportExcel} />
+            </label>
+          )}
+          {canExport('employees') && (
+            <button 
+              onClick={handleExportExcel}
+              className="p-3 bg-white border border-gray-100 rounded-xl text-gray-500 hover:bg-gray-50 transition-colors shadow-sm flex items-center gap-2 font-bold"
+            >
+              <Download className="w-5 h-5" />
+              <span className="hidden md:inline">تصدير</span>
+            </button>
+          )}
+          {canCreate('employees') && (
+            <button 
+              onClick={() => { setEditingEmployee(null); setIsModalOpen(true); }}
+              className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-2xl transition-all shadow-lg shadow-blue-200"
+            >
+              <UserPlus className="w-5 h-5" />
+              <span>إضافة موظف</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -378,7 +370,7 @@ export const EmployeesList: React.FC = () => {
                   </td>
                   <td className="px-8 py-5">
                     <span className="px-4 py-1.5 bg-blue-50 text-blue-700 rounded-lg text-[10px] font-black border border-blue-100 uppercase tracking-tight">
-                      {adminDepartments.find(d => d.id === emp.departmentId)?.name || emp.sectorManagement || 'غير محدد'}
+                      {adminDepartments.find(d => d.id === emp.departmentId)?.name || 'غير محدد'}
                     </span>
                   </td>
                   <td className="px-8 py-5">
@@ -406,18 +398,22 @@ export const EmployeesList: React.FC = () => {
                   </td>
                   <td className="px-8 py-5">
                     <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button 
-                        onClick={() => handleEdit(emp)}
-                        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      <button 
-                        onClick={() => setDeleteConfirm({ id: emp.id, show: true })}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      {canEdit('employees') && (
+                        <button 
+                          onClick={() => handleEdit(emp)}
+                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDelete('employees') && (
+                        <button 
+                          onClick={() => setDeleteConfirm({ id: emp.id, show: true })}
+                          className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -492,14 +488,6 @@ export const EmployeesList: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">صاحب العمل الرسمي</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.officialEmployer || ''}
-                      onChange={(e) => setFormData({...formData, officialEmployer: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-500 mr-2">الجنسية</label>
                     <input 
                       className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
@@ -508,19 +496,11 @@ export const EmployeesList: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">الوظيفة</label>
+                    <label className="text-sm font-bold text-gray-500 mr-2">المسمى الوظيفي</label>
                     <input 
                       className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                       value={formData.jobTitle || ''}
                       onChange={(e) => setFormData({...formData, jobTitle: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">المهنة</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.professionAsPerIqama || ''}
-                      onChange={(e) => setFormData({...formData, professionAsPerIqama: e.target.value})}
                     />
                   </div>
                   <div className="space-y-2">
@@ -533,13 +513,15 @@ export const EmployeesList: React.FC = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">آخر مباشرة</label>
-                    <input 
-                      type="date"
+                    <label className="text-sm font-bold text-gray-500 mr-2">نوع الدوام</label>
+                    <select 
                       className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.lastDirectDate || ''}
-                      onChange={(e) => setFormData({...formData, lastDirectDate: e.target.value})}
-                    />
+                      value={formData.workType}
+                      onChange={(e) => setFormData({...formData, workType: e.target.value as any})}
+                    >
+                      <option value="Full time">تفرغ كامل (Full time)</option>
+                      <option value="Part time">دوام جزئي (Part time)</option>
+                    </select>
                   </div>
                    <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-500 mr-2">القسم الإداري</label>
@@ -553,46 +535,6 @@ export const EmployeesList: React.FC = () => {
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
                     </select>
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">ادارة القطاع (قديم)</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.sectorManagement || ''}
-                      onChange={(e) => setFormData({...formData, sectorManagement: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">القطاعات</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.sectors || ''}
-                      onChange={(e) => setFormData({...formData, sectors: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">مركز التكلفة / رئيسي</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.costCenterMain || ''}
-                      onChange={(e) => setFormData({...formData, costCenterMain: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">مركز التكلفة / قسم</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.costCenterDept || ''}
-                      onChange={(e) => setFormData({...formData, costCenterDept: e.target.value})}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-sm font-bold text-gray-500 mr-2">الموقع</label>
-                    <input 
-                      className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium"
-                      value={formData.location || ''}
-                      onChange={(e) => setFormData({...formData, location: e.target.value})}
-                    />
                   </div>
                   <div className="space-y-2">
                     <label className="text-sm font-bold text-gray-500 mr-2">نوع استلام الراتب</label>

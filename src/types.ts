@@ -1,5 +1,20 @@
 export type UserRole = 'HR' | 'Finance' | 'Admin' | 'Viewer';
 
+export interface ScreenActionConfig {
+  view: boolean;
+  create: boolean;
+  edit: boolean;
+  delete: boolean;
+  export: boolean;
+}
+
+export interface PermissionConfig {
+  screens?: {
+    [screenId: string]: ScreenActionConfig;
+  };
+  departments?: string[]; // IDs of allowed departments, or empty for all.
+}
+
 export interface Allowance {
   id?: string;
   type: string;
@@ -18,6 +33,7 @@ export interface AppUser {
   role: UserRole;
   status: 'Active' | 'Inactive';
   createdAt: string;
+  permissions?: PermissionConfig;
 }
 
 export type AttendanceType = 'In' | 'Out';
@@ -99,17 +115,10 @@ export interface Employee {
   employeeId: string; // الرقم الوظيفي
   name: string; // الإسم
   iqamaNumber: string; // رقم الإقامة
-  officialEmployer: string; // صاحب العمل الرسمي
-  professionAsPerIqama: string; // المهنة حسب الاقامة
   nationality: string; // الجنسية
-  jobTitle: string; // الوظيفة
+  jobTitle: string; // المسمى الوظيفي
   joinDate: string; // بداية العمل
-  lastDirectDate: string; // آخر مباشرة
-  sectorManagement: string; // ادارة القطاع
-  sectors: string; // القطاعات
-  costCenterMain: string; // مركز التكلفة / رئيسي
-  costCenterDept: string; // مركز التكلفة / قسم
-  location: string; // الموقع
+  workType: 'Full time' | 'Part time'; // نوع الدوام
   bankAccount: string; // الايبــــــــــان
   bankCode: string; // كود البنك
   paymentMethod: PaymentMethod; // نوع استلام الراتب
@@ -285,8 +294,7 @@ export interface PayrollResult {
   employeeId: string;
   employeeName: string;
   iqamaNumber?: string;
-  officialEmployer?: string;
-  location?: string;
+  workType?: 'Full time' | 'Part time';
   paymentMethod?: PaymentMethod;
   bankAccount: string;
   bankCode?: string;

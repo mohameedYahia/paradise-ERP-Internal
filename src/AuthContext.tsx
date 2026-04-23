@@ -33,7 +33,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (firebaseUser) {
         const userEmail = firebaseUser.email?.toLowerCase();
         
-        // 1. Check employees collection by email first (Most connected)
+        // 1. Check users collection by email (Internal admin users)
+        if (userEmail) {
+          try {
+            const userDoc = await getDoc(doc(db, 'users', userEmail));
+            if (userDoc.exists()) {
+              setProfile({ id: userDoc.id, ...userDoc.data() } as AppUser);
+              setLoading(false);
+              return;
+            }
+          } catch(e) {
+            console.warn('Silent skip: could not read users by email', e);
+          }
+        }
+
+        // 2. Check employees collection by email
         if (userEmail) {
           try {
             const empQuery = query(collection(db, 'employees'), where('email', '==', userEmail.trim()));
@@ -46,20 +60,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           } catch (e) {
             console.warn('Silent skip: could not read employees by email initially', e);
-          }
-        }
-
-        // 2. Check users collection by email (Internal admin users)
-        if (userEmail) {
-          try {
-            const userDoc = await getDoc(doc(db, 'users', userEmail));
-            if (userDoc.exists()) {
-              setProfile({ id: userDoc.id, ...userDoc.data() } as AppUser);
-              setLoading(false);
-              return;
-            }
-          } catch(e) {
-            console.warn('Silent skip: could not read users by email', e);
           }
         }
 
