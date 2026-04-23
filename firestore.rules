@@ -57,7 +57,7 @@ service cloud.firestore {
     // Validation Blueprint - AppUser
     function isValidAppUser(data, isCreate) {
       return data.keys().hasAll(['email', 'name', 'role', 'status']) &&
-             (!isCreate || data.keys().size() == 5 || data.keys().size() == 6 || data.keys().size() == 4) && // email, name, role, status + id? createdAt?
+             data.keys().size() <= 8 && // email, name, role, status + id? createdAt? permissions?
              data.email is string && data.email.size() <= 256 &&
              data.name is string && data.name.size() <= 256 &&
              data.role in ['HR', 'Finance', 'Admin', 'Viewer'] &&
@@ -84,7 +84,7 @@ service cloud.firestore {
       allow list: if isAdmin();
       allow create: if isSignedIn() && isValidId(userId) && (isAdmin() || getUserEmail() == userId) && isValidAppUser(incoming(), true);
       allow update: if isSignedIn() && isValidId(userId) && isValidAppUser(incoming(), false) && (
-        isAdmin() || (
+        (isAdmin() && incoming().diff(existing()).affectedKeys().hasOnly(['email', 'name', 'role', 'status', 'permissions', 'updatedAt', 'createdAt'])) || (
           getUserEmail() == userId && 
           incoming().diff(existing()).affectedKeys().hasOnly(['name']) // Basic user can only change name
         )
@@ -141,7 +141,7 @@ service cloud.firestore {
       allow get: if isSignedIn() && isValidId(resultId) && (isFinance() || isOwnerOfEmployee(existing().employeeId));
       allow list: if isSignedIn(); // Relaxed for query support
       allow create: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']) &&
-          exists(/databases/$(database)/documents/payrollRuns/$(incoming().payrollRunId));
+          existsAfter(/databases/$(database)/documents/payrollRuns/$(incoming().payrollRunId));
       allow update: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']);
       allow delete: if isAdmin() && isValidId(resultId);
     }

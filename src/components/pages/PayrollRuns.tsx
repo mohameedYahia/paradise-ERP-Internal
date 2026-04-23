@@ -172,8 +172,14 @@ export const PayrollRuns: React.FC = () => {
     };
 
     batch.set(runDocRef, run);
-    await batch.commit();
-    setIsModalOpen(false);
+    try {
+      await batch.commit();
+      setIsModalOpen(false);
+    } catch (err: any) {
+      console.error("Batch commit failed", err);
+      // alert user
+      alert("حدث خطأ أثناء احتساب رواتب الشهر: " + err.message);
+    }
   };
 
   const fetchResults = async (runId: string) => {

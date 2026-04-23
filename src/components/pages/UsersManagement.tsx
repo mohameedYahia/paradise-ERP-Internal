@@ -83,13 +83,19 @@ export const UsersManagement: React.FC = () => {
 
     const id = editingUserId || formData.email.toLowerCase();
     
-    await setDoc(doc(db, 'users', id), {
-      ...formData,
-      email: formData.email.toLowerCase(),
-      createdAt: editingUserId ? (users.find(u => u.id === id)?.createdAt || new Date().toISOString()) : new Date().toISOString()
-    });
-
-    setIsModalOpen(false);
+    try {
+      await setDoc(doc(db, 'users', id), {
+        ...formData,
+        email: formData.email.toLowerCase(),
+        updatedAt: new Date().toISOString(),
+        ...(editingUserId ? {} : { createdAt: new Date().toISOString() })
+      }, { merge: true }); // Using merge true will let existing properties persist or overwrite properly
+      
+      setIsModalOpen(false);
+    } catch (err) {
+      console.error("Error setting user doc:", err);
+      handleFirestoreError(err, OperationType.UPDATE, 'users');
+    }
   };
 
   const handleDelete = async (id: string) => {

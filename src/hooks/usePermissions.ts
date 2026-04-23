@@ -7,7 +7,7 @@ export const usePermissions = () => {
   const { adminDepartments } = useData();
 
   // If user is the super admin email, they have full access.
-  if (isAdmin && !('permissions' in (profile || {}))) {
+  if (isAdmin && !profile?.permissions) {
       return {
           canView: () => true,
           canEdit: () => true,

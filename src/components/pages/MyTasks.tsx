@@ -23,13 +23,23 @@ import { ProjectTask, TaskStatus, WorkflowLog, TaskChatMessage } from '../../typ
 import { cn } from '../../lib/utils';
 
 export const MyTasks: React.FC = () => {
-  const { projectTasks, projects } = useData();
+  const { projectTasks, projects, employees } = useData();
   const { profile, user } = useAuth();
 
   const myTasks = useMemo(() => {
-    if (!profile) return [];
-    return projectTasks.filter(t => t.assignedToId === profile.id || (t.assignedToIds && t.assignedToIds.includes(profile.id)));
-  }, [projectTasks, profile]);
+    if (!profile && !user) return [];
+    
+    // Attempt to find the employee record associated with the current user's email
+    // This is vital because profile.id could be the email (if from 'users' collection)
+    // while tasks are assigned using the employee document ID.
+    const myEmployeeRecord = employees.find(e => e.email?.toLowerCase() === user?.email?.toLowerCase());
+    const validIds = [profile?.id, myEmployeeRecord?.id].filter(Boolean);
+    
+    return projectTasks.filter(t => 
+      validIds.includes(t.assignedToId) || 
+      (t.assignedToIds && t.assignedToIds.some(id => validIds.includes(id)))
+    );
+  }, [projectTasks, profile, user, employees]);
 
   const stats = useMemo(() => ({
     total: myTasks.length,

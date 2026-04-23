@@ -20,6 +20,28 @@
         "name": { "type": "string" },
         "role": { "type": "string", "enum": ["HR", "Finance", "Admin", "Viewer"] },
         "status": { "type": "string", "enum": ["Active", "Inactive"] },
+        "permissions": {
+          "type": "object",
+          "properties": {
+            "screens": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "properties": {
+                  "view": { "type": "boolean" },
+                  "create": { "type": "boolean" },
+                  "edit": { "type": "boolean" },
+                  "delete": { "type": "boolean" },
+                  "export": { "type": "boolean" }
+                }
+              }
+            },
+            "departments": {
+              "type": "array",
+              "items": { "type": "string" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["email", "name", "role", "status"]
