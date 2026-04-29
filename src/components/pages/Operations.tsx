@@ -69,7 +69,7 @@ export const Operations: React.FC = () => {
       if (!initRes.ok) {
         let errorMsg = 'فشل تهيئة الرفع';
         try { const err = await initRes.json(); errorMsg = err.error || errorMsg; } catch(e) {}
-        throw new Error(errorMsg);
+        throw new Error("Init Error: " + errorMsg);
       }
 
       const { uploadUrl } = await initRes.json();
@@ -81,7 +81,10 @@ export const Operations: React.FC = () => {
         body: file
       });
 
-      if (!uploadRes.ok) throw new Error("فشل الرفع مباشرة إلى Google Drive");
+      if (!uploadRes.ok) {
+        let text = await uploadRes.text();
+        throw new Error(`Google Drive PUT failed (${uploadRes.status}): ` + text);
+      }
       
       const fileMetadata = await uploadRes.json();
 
@@ -95,7 +98,7 @@ export const Operations: React.FC = () => {
       if (!finalizeRes.ok) {
         let errorMsg = 'فشل إنهاء الرفع';
         try { const err = await finalizeRes.json(); errorMsg = err.error || errorMsg; } catch(e) {}
-        throw new Error(errorMsg);
+        throw new Error("Finalize Error: " + errorMsg);
       }
 
       const data = await finalizeRes.json();
@@ -116,7 +119,7 @@ export const Operations: React.FC = () => {
       setUploadingFile(false);
     } catch (error: any) {
       console.error('Upload Error:', error);
-      alert('حدث خطأ أثناء الرفع: ' + error.message);
+      alert('حدث خطأ أثناء الرفع: \n\n' + error.message + '\n\nاسم الملف: ' + file.name + '\nنوع الملف: ' + file.type);
       setUploadingFile(false);
     } finally {
       e.target.value = '';

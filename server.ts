@@ -80,13 +80,21 @@ async function startServer() {
         parents: [folderId],
       };
 
+      let origin = req.headers.origin as string;
+      if (!origin && req.headers.referer) {
+        origin = new URL(req.headers.referer).origin;
+      }
+      if (!origin && req.headers.host) {
+        origin = `${req.protocol}://${req.headers.host}`;
+      }
+
       const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${accessToken.token || accessToken}`,
           'Content-Type': 'application/json',
           'X-Upload-Content-Type': mimeType,
-          'Origin': req.headers.origin || '',
+          'Origin': origin || '',
         },
         body: JSON.stringify(metadata)
       });
