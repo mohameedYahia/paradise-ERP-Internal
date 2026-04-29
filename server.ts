@@ -22,7 +22,115 @@ async function startServer() {
   // Middleware for parsing JSON
   app.use(express.json());
 
-  // API Route for uploading to Google Drive
+  async function getGoogleAuthClient() {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+    const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+
+    const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const rawPrivateKey = process.env.GOOGLE_PRIVATE_KEY || '';
+    let privateKey = rawPrivateKey.replace(/^["']|["']$/g, '').replace(/\\n/g, '\n');
+
+    if (clientId && clientSecret && refreshToken) {
+      const oauth2Client = new google.auth.OAuth2(
+        clientId,
+        clientSecret,
+        "https://developers.google.com/oauthplayground"
+      );
+      oauth2Client.setCredentials({ refresh_token: refreshToken });
+      return oauth2Client;
+    } else if (clientEmail && privateKey && privateKey.trim() !== '') {
+      const authClient = new google.auth.JWT({
+        email: clientEmail,
+        key: privateKey,
+        scopes: ["https://www.googleapis.com/auth/drive.file"],
+      });
+      await authClient.authorize();
+      return authClient;
+    } else {
+      throw new Error("Missing Google Drive credentials in environment variables.");
+    }
+  }
+
+  app.post("/api/upload/init", async (req, res) => {
+    try {
+      const { name, mimeType } = req.body;
+      const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+      
+      if (!folderId) {
+        return res.status(500).json({ error: "Missing GOOGLE_DRIVE_FOLDER_ID" });
+      }
+
+      const authClient = await getGoogleAuthClient();
+      const accessToken = await authClient.getAccessToken();
+
+      const metadata = {
+        name: name,
+        parents: [folderId],
+      };
+
+      const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&supportsAllDrives=true', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken.token || accessToken}`,
+          'Content-Type': 'application/json',
+          'X-Upload-Content-Type': mimeType,
+        },
+        body: JSON.stringify(metadata)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        return res.status(500).json({ error: "Failed to initiate resumable upload", details: errorText });
+      }
+
+      const uploadUrl = response.headers.get('location');
+      res.json({ uploadUrl });
+    } catch (error: any) {
+      console.error("Initiate upload error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/upload/finalize", async (req, res) => {
+    try {
+      const { fileId } = req.body;
+      if (!fileId) return res.status(400).json({ error: "Missing fileId" });
+
+      const authClient = await getGoogleAuthClient();
+      const drive = google.drive({ version: "v3", auth: authClient });
+      
+      try {
+        await drive.permissions.create({
+          fileId: fileId,
+          supportsAllDrives: true,
+          requestBody: {
+            role: "reader",
+            type: "anyone",
+          },
+        });
+      } catch (permError: any) {
+        console.warn("Could not set 'anyone' permission:", permError.message);
+      }
+      
+      const driveFile = await drive.files.get({
+        fileId: fileId,
+        fields: "webViewLink, webContentLink",
+        supportsAllDrives: true
+      });
+      
+      res.json({
+        url: driveFile.data.webViewLink || driveFile.data.webContentLink,
+        id: fileId
+      });
+      
+    } catch (error: any) {
+      console.error("Finalize upload error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Legacy API Route for uploading to Google Drive
   app.post("/api/upload", (req, res, next) => {
     upload.single("file")(req, res, (err) => {
       if (err instanceof multer.MulterError) {

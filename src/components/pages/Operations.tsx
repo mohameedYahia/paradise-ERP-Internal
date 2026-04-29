@@ -56,47 +56,49 @@ export const Operations: React.FC = () => {
   const handleFileUpload = async (taskId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    
-    // Limits checked on backend now, we can allow up to 1GB
-    if (file.size > 1024 * 1024 * 1024) {
-      alert("حجم الملف كبير جداً (أكبر من 1 جيجابايت). يرجى الترفيع مباشرة للدرايف واستخدام زر 'إضافة رابط'");
-      e.target.value = '';
-      return;
-    }
 
     setUploadingFile(true);
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const response = await fetch("/api/upload", {
+      // 1. Initialize resumable upload
+      const initRes = await fetch("/api/upload/init", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: file.name, mimeType: file.type || "application/octet-stream" })
       });
 
-      if (!response.ok) {
-        let errorMsg = 'Failed to upload to Google Drive';
-        try {
-          const err = await response.json();
-          errorMsg = err.error || errorMsg;
-        } catch(e) {
-          errorMsg = response.statusText || 'Server returned invalid format. File might be too large for the proxy limit.';
-        }
+      if (!initRes.ok) {
+        let errorMsg = 'فشل تهيئة الرفع';
+        try { const err = await initRes.json(); errorMsg = err.error || errorMsg; } catch(e) {}
         throw new Error(errorMsg);
       }
 
-      let data;
-      try {
-        const text = await response.text();
-        try {
-          data = JSON.parse(text);
-        } catch (jsonErr) {
-          console.error("Failed to parse JSON on 200 OK. Original response text:", text.substring(0, 500));
-          throw new Error("Server returned an invalid response format (not JSON). Check console for details.");
-        }
-      } catch (err: any) {
-        throw new Error(err.message || "Server returned an invalid response. The connection might have been interrupted or the file is too large.");
+      const { uploadUrl } = await initRes.json();
+
+      // 2. Upload file directly to Google Drive URL
+      const uploadRes = await fetch(uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file
+      });
+
+      if (!uploadRes.ok) throw new Error("فشل الرفع مباشرة إلى Google Drive");
+      
+      const fileMetadata = await uploadRes.json();
+
+      // 3. Finalize upload (set permissions and get view link)
+      const finalizeRes = await fetch("/api/upload/finalize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fileId: fileMetadata.id })
+      });
+
+      if (!finalizeRes.ok) {
+        let errorMsg = 'فشل إنهاء الرفع';
+        try { const err = await finalizeRes.json(); errorMsg = err.error || errorMsg; } catch(e) {}
+        throw new Error(errorMsg);
       }
+
+      const data = await finalizeRes.json();
 
       const newAttachment = {
         name: file.name,
