@@ -61,8 +61,19 @@ async function startServer() {
         return res.status(500).json({ error: "Missing GOOGLE_DRIVE_FOLDER_ID" });
       }
 
-      const authClient = await getGoogleAuthClient();
-      const accessToken = await authClient.getAccessToken();
+      let authClient;
+      let accessToken;
+      try {
+        authClient = await getGoogleAuthClient();
+        accessToken = await authClient.getAccessToken();
+      } catch (authError: any) {
+        console.error("Google Drive Auth Error:", authError);
+        const errorMsg = authError.message || authError.response?.data?.error || "Authentication failed";
+        if (errorMsg === "invalid_grant" || errorMsg.includes("invalid_grant")) {
+          return res.status(401).json({ error: "خطأ في تسجيل الدخول لـ Google Drive: يرجى تحديث GOOGLE_REFRESH_TOKEN الخاص بك في الإعدادات، فقد انتهت صلاحيته." });
+        }
+        return res.status(500).json({ error: `Google Drive Auth Error: ${errorMsg}` });
+      }
 
       const metadata = {
         name: name,
@@ -75,6 +86,7 @@ async function startServer() {
           'Authorization': `Bearer ${accessToken.token || accessToken}`,
           'Content-Type': 'application/json',
           'X-Upload-Content-Type': mimeType,
+          'Origin': req.headers.origin || '',
         },
         body: JSON.stringify(metadata)
       });
@@ -97,7 +109,17 @@ async function startServer() {
       const { fileId } = req.body;
       if (!fileId) return res.status(400).json({ error: "Missing fileId" });
 
-      const authClient = await getGoogleAuthClient();
+      let authClient;
+      try {
+        authClient = await getGoogleAuthClient();
+      } catch (authError: any) {
+        console.error("Google Drive Auth Error:", authError);
+        const errorMsg = authError.message || authError.response?.data?.error || "Authentication failed";
+        if (errorMsg === "invalid_grant" || errorMsg.includes("invalid_grant")) {
+          return res.status(401).json({ error: "خطأ في تسجيل الدخول لـ Google Drive: يرجى تحديث GOOGLE_REFRESH_TOKEN الخاص بك في الإعدادات، فقد انتهت صلاحيته." });
+        }
+        return res.status(500).json({ error: `Google Drive Auth Error: ${errorMsg}` });
+      }
       const drive = google.drive({ version: "v3", auth: authClient });
       
       try {
