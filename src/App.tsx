@@ -5,6 +5,8 @@ import { Layout } from './components/Layout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 
 import { DataProvider } from './contexts/DataContext';
+import { GlobalNotifications } from './components/GlobalNotifications';
+import { ChatHeads } from './components/ChatHeads';
 
 const AppContent: React.FC = () => {
   const { user, loading } = useAuth();
@@ -23,6 +25,8 @@ const AppContent: React.FC = () => {
   return user ? (
     <DataProvider>
       <Layout />
+      <GlobalNotifications />
+      <ChatHeads />
     </DataProvider>
   ) : <Login />;
 };

@@ -37,6 +37,7 @@ import { useAuth } from '../../AuthContext';
 import { db, collection, addDoc, deleteDoc, doc, updateDoc, arrayUnion, storage, ref, uploadBytes, getDownloadURL } from '../../firebase';
 import { Project, ProjectTask, ProjectStatus, TaskStatus, ProjectPhase, WorkflowLog, Employee, SubTask, TaskChatMessage } from '../../types';
 import { cn } from '../../lib/utils';
+import { ChatInputWithMentions } from '../ChatInputWithMentions';
 
 export const Operations: React.FC = () => {
   const { projects, projectTasks, employees, missions } = useData();
@@ -54,7 +55,7 @@ export const Operations: React.FC = () => {
   
   const handleFileUpload = async (taskId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user || !profile) return;
+    if (!file || !user) return;
     
     // Limits checked on backend now, we can allow up to 1GB
     if (file.size > 1024 * 1024 * 1024) {
@@ -100,7 +101,7 @@ export const Operations: React.FC = () => {
       const newAttachment = {
         name: file.name,
         url: data.url,
-        uploadedBy: profile.name || user.displayName || 'User',
+        uploadedBy: profile?.name || user?.displayName || 'User',
         timestamp: new Date().toISOString(),
         source: 'GoogleDrive',
       };
@@ -387,7 +388,7 @@ export const Operations: React.FC = () => {
   };
 
   const handleSendChatMessage = async (targetId: string, type: 'task' | 'project', text: string) => {
-    if (!text.trim() || !user || !profile) return;
+    if (!text.trim() || !user) return;
     
     // Simple mention detection
     const mentions = employees
@@ -397,7 +398,7 @@ export const Operations: React.FC = () => {
     const message: TaskChatMessage = {
       id: crypto.randomUUID(),
       userId: user.uid,
-      userName: profile.name || user.displayName || 'User',
+      userName: profile?.name || user?.displayName || 'User',
       text,
       mentions,
       createdAt: new Date().toISOString()
@@ -417,43 +418,6 @@ export const Operations: React.FC = () => {
       console.error('Error sending message:', error);
     }
   };
-
-  // Notification Sound Listener for Mentions
-  useEffect(() => {
-    if (!user || (!projects.length && !projectTasks.length)) return;
-
-    const myEmpId = employees.find(e => e.email === user.email)?.id;
-    if (!myEmpId) return;
-
-    let hasNewMention = false;
-    const allMessages: TaskChatMessage[] = [];
-    
-    projects.forEach(p => p.chat && allMessages.push(...p.chat));
-    projectTasks.forEach(t => t.comments && allMessages.push(...t.comments));
-
-    allMessages.forEach(msg => {
-      // Check if message was received in the last 10 seconds (to avoid ringing on old messages)
-      const isRecent = (new Date().getTime() - new Date(msg.createdAt).getTime()) < 10000;
-      if (isRecent && msg.mentions?.includes(myEmpId) && msg.userId !== user.uid) {
-        // If it's a recent mention directed at me from someone else
-        // We use a ref or session storage to not ring for the exact same message twice
-        const seen = sessionStorage.getItem(`seen_msg_${msg.id}`);
-        if (!seen) {
-           sessionStorage.setItem(`seen_msg_${msg.id}`, 'true');
-           hasNewMention = true;
-        }
-      }
-    });
-
-    if (hasNewMention) {
-       try {
-         // Standard short pop sound in base64
-         const audio = new Audio('data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq');
-         audio.play().catch(e => console.log("Audio play blocked by browser:", e));
-       } catch (err) {}
-    }
-
-  }, [projects, projectTasks, user, employees]);
 
   return (
     <div className="space-y-8 pb-32">
@@ -1572,98 +1536,6 @@ const TaskList: React.FC<{
           </div>
         </div>
       ))}
-    </div>
-  );
-};
-
-const ChatInputWithMentions: React.FC<{
-  value: string;
-  onChange: (val: string) => void;
-  onSend: () => void;
-  employees: Employee[];
-  placeholder?: string;
-  className?: string;
-}> = ({ value, onChange, onSend, employees, placeholder, className }) => {
-  const [showMentions, setShowMentions] = useState(false);
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [cursorPos, setCursorPos] = useState(0);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    onChange(val);
-    const pos = e.target.selectionStart || 0;
-    setCursorPos(pos);
-
-    const textBeforeCursor = val.substring(0, pos);
-    const match = textBeforeCursor.match(/(?:^|\s)(@([^\s]*))$/);
-
-    if (match) {
-      setShowMentions(true);
-      setMentionQuery(match[2].toLowerCase());
-    } else {
-      setShowMentions(false);
-    }
-  };
-
-  const handleSelectMention = (employeeName: string) => {
-    const textBeforeCursor = value.substring(0, cursorPos);
-    const textAfterCursor = value.substring(cursorPos);
-    const match = textBeforeCursor.match(/(?:^|\s)(@([^\s]*))$/);
-
-    if (match) {
-      const prefix = textBeforeCursor.substring(0, textBeforeCursor.length - match[1].length);
-      const newVal = prefix + '@' + employeeName + ' ' + textAfterCursor;
-      onChange(newVal);
-      setShowMentions(false);
-      inputRef.current?.focus();
-    }
-  };
-
-  const filteredEmployees = employees.filter(e => e.name.toLowerCase().includes(mentionQuery));
-
-  return (
-    <div className="relative flex-1 flex flex-col font-sans">
-      {showMentions && filteredEmployees.length > 0 && (
-        <div className="absolute bottom-full right-0 mb-2 w-64 bg-white border border-gray-100 rounded-2xl shadow-xl overflow-hidden z-[100] animate-in fade-in slide-in-from-bottom-2">
-          <div className="max-h-48 overflow-y-auto no-scrollbar py-2">
-            {filteredEmployees.map(emp => (
-              <button
-                key={emp.id}
-                type="button"
-                className="w-full flex items-center text-right px-4 py-3 hover:bg-indigo-50 text-indigo-900 border-b border-gray-50 last:border-0 transition"
-                onClick={() => handleSelectMention(emp.name)}
-              >
-                <div className="flex justify-between items-center w-full">
-                  <span className="font-bold text-sm">{emp.name}</span>
-                  <span className="text-[10px] text-indigo-400 bg-indigo-50 px-2 py-0.5 rounded-md">{emp.employeeId}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-      <input 
-        ref={inputRef}
-        className={className}
-        placeholder={placeholder}
-        value={value}
-        onChange={handleInput}
-        onClick={(e) => setCursorPos(e.currentTarget.selectionStart || 0)}
-        onKeyUp={(e) => setCursorPos(e.currentTarget.selectionStart || 0)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') {
-            if (showMentions && filteredEmployees.length > 0) {
-              e.preventDefault();
-              handleSelectMention(filteredEmployees[0].name);
-            } else {
-              onSend();
-            }
-          } else if (e.key === 'Escape') {
-            setShowMentions(false);
-          }
-        }}
-      />
     </div>
   );
 };

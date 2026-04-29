@@ -21,6 +21,29 @@ import { useAuth } from '../../AuthContext';
 import { db, doc, updateDoc, arrayUnion, storage, ref, uploadBytes, getDownloadURL } from '../../firebase';
 import { ProjectTask, TaskStatus, WorkflowLog, TaskChatMessage } from '../../types';
 import { cn } from '../../lib/utils';
+import { ChatInputWithMentions } from '../ChatInputWithMentions';
+
+const TaskChatInput: React.FC<{ 
+  taskId: string; 
+  onSend: (taskId: string, text: string) => void; 
+  employees: any[];
+}> = ({ taskId, onSend, employees }) => {
+  const [value, setValue] = React.useState('');
+  return (
+    <ChatInputWithMentions
+      value={value}
+      onChange={setValue}
+      onSend={() => {
+        if (!value.trim()) return;
+        onSend(taskId, value);
+        setValue('');
+      }}
+      employees={employees}
+      placeholder="أضف تعليقاً... استخدم @ لعمل منشن"
+      className="w-full bg-white px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-indigo-500 text-xs font-bold text-right font-sans transition-all"
+    />
+  );
+};
 
 export const MyTasks: React.FC = () => {
   const { projectTasks, projects, employees } = useData();
@@ -32,8 +55,25 @@ export const MyTasks: React.FC = () => {
     // Attempt to find the employee record associated with the current user's email
     // This is vital because profile.id could be the email (if from 'users' collection)
     // while tasks are assigned using the employee document ID.
-    const myEmployeeRecord = employees.find(e => e.email?.toLowerCase() === user?.email?.toLowerCase());
-    const validIds = [profile?.id, myEmployeeRecord?.id].filter(Boolean);
+    const myEmployeeRecord = employees.find(e => {
+       const empEmail = e.email?.trim().toLowerCase();
+       const userEmail = user?.email?.trim().toLowerCase();
+       return empEmail && userEmail && empEmail === userEmail;
+    });
+
+    const validIds = [profile?.id, myEmployeeRecord?.id, profile?.employeeId, user?.uid].filter(Boolean);
+
+    console.log("MyTasks Debug:", {
+       profile,
+       userEmail: user?.email,
+       myEmployeeRecord,
+       validIds,
+       totalTasks: projectTasks.length,
+       assignedTasks: projectTasks.filter(t => 
+          validIds.includes(t.assignedToId) || 
+          (t.assignedToIds && t.assignedToIds.some(id => validIds.includes(id)))
+       ).length
+    });
     
     return projectTasks.filter(t => 
       validIds.includes(t.assignedToId) || 
@@ -67,7 +107,7 @@ export const MyTasks: React.FC = () => {
       fromStatus: task.status,
       toStatus: newStatus,
       userId: user.uid,
-      userName: profile.name || user.displayName || 'User',
+      userName: profile?.name || user?.displayName || 'User',
       timestamp: new Date().toISOString(),
       note: 'Updated from My Tasks'
     };
@@ -105,7 +145,7 @@ export const MyTasks: React.FC = () => {
 
   const handleFileUpload = async (taskId: string, e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !user || !profile) return;
+    if (!file || !user) return;
     
     // Limits checked on backend now, we can allow up to 1GB
     if (file.size > 1024 * 1024 * 1024) {
@@ -151,7 +191,7 @@ export const MyTasks: React.FC = () => {
       const newAttachment = {
         name: file.name,
         url: data.url,
-        uploadedBy: profile.name || user.displayName || 'User',
+        uploadedBy: profile?.name || user?.displayName || 'User',
         timestamp: new Date().toISOString(),
         source: 'GoogleDrive',
       };
@@ -196,14 +236,17 @@ export const MyTasks: React.FC = () => {
   };
 
   const handleSendChatMessage = async (taskId: string, text: string) => {
-    if (!text.trim() || !user || !profile) return;
+    if (!text.trim() || !user) return;
     
-    const mentions = text.match(/@(\w+)/g)?.map(m => m.slice(1)) || [];
+    // Simple mention detection
+    const mentions = employees
+      .filter(e => text.includes(`@${e.name}`))
+      .map(e => e.id);
 
     const newMessage: TaskChatMessage = {
       id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
       userId: user.uid,
-      userName: profile.name || user.displayName || 'User',
+      userName: profile?.name || user?.displayName || 'User',
       text,
       mentions,
       createdAt: new Date().toISOString()
@@ -237,7 +280,7 @@ export const MyTasks: React.FC = () => {
           </div>
           <div>
             <h1 className="text-4xl font-black text-gray-900 leading-tight">مهامي الشخصية</h1>
-            <p className="text-gray-500 font-medium text-lg">أهلاً {profile.name}، لديك {stats.pending + stats.inProgress} مهام نشطة اليوم</p>
+            <p className="text-gray-500 font-medium text-lg">أهلاً {profile?.name}، لديك {stats.pending + stats.inProgress} مهام نشطة اليوم</p>
           </div>
         </div>
       </div>
@@ -477,15 +520,10 @@ export const MyTasks: React.FC = () => {
                         )}
                      </div>
                      <div className="flex gap-2">
-                       <input 
-                           className="flex-1 bg-white px-4 py-2 rounded-xl border border-gray-200 outline-none focus:border-indigo-500 text-xs font-bold text-right font-sans transition-all"
-                           placeholder="أضف تعليقاً... واضغط Enter"
-                           onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                 handleSendChatMessage(t.id, (e.target as HTMLInputElement).value);
-                                 (e.target as HTMLInputElement).value = '';
-                              }
-                           }}
+                       <TaskChatInput 
+                         taskId={t.id} 
+                         onSend={handleSendChatMessage} 
+                         employees={employees} 
                        />
                      </div>
                   </div>

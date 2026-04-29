@@ -122,20 +122,17 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const hrOrAdmin = isAdmin || profile?.role === 'HR';
     const financeOrAdmin = isAdmin || profile?.role === 'Finance' || profile?.role === 'HR'; // Finance or HR or Admin
     const isBasicUser = !hrOrAdmin && !financeOrAdmin;
+    const actualEmployeeId = (profile as any)?.employeeId || (profile?.role ? null : profile?.id) || user?.uid;
 
     let unsubEmployees = () => {};
     if (hrOrAdmin || financeOrAdmin) {
       unsubEmployees = onSnapshot(collection(db, 'employees'), (snap) => {
         setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
       }, (err) => handleLocalError(err, OperationType.LIST, 'employees'));
-    } else if (profile?.id) {
-      unsubEmployees = onSnapshot(doc(db, 'employees', profile.id), (docSnap) => {
-        if (docSnap.exists()) {
-          setEmployees([{ id: docSnap.id, ...docSnap.data() } as Employee]);
-        } else {
-          setEmployees([]);
-        }
-      }, (err) => handleLocalError(err, OperationType.GET, 'employees'));
+    } else if (user?.email) {
+      unsubEmployees = onSnapshot(query(collection(db, 'employees'), where('email', '==', user.email.trim())), (snap) => {
+        setEmployees(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Employee)));
+      }, (err) => handleLocalError(err, OperationType.LIST, 'employees'));
     }
 
     let unsubTransactions = () => {};
@@ -143,8 +140,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unsubTransactions = onSnapshot(collection(db, 'transactions'), (snap) => {
         setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       }, (err) => handleLocalError(err, OperationType.LIST, 'transactions'));
-    } else if (profile?.id) {
-      unsubTransactions = onSnapshot(query(collection(db, 'transactions'), where('employeeId', '==', profile.id)), (snap) => {
+    } else if (actualEmployeeId) {
+      unsubTransactions = onSnapshot(query(collection(db, 'transactions'), where('employeeId', '==', actualEmployeeId)), (snap) => {
         setTransactions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Transaction)));
       }, (err) => handleLocalError(err, OperationType.LIST, 'transactions'));
     }
@@ -185,8 +182,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubMissions = onSnapshot(collection(db, 'missions'), (snap) => {
             setMissions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mission)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'missions'));
-    } else if (profile?.id) {
-        unsubMissions = onSnapshot(query(collection(db, 'missions'), where('employeeId', '==', profile.id)), (snap) => {
+    } else if (actualEmployeeId) {
+        unsubMissions = onSnapshot(query(collection(db, 'missions'), where('employeeId', '==', actualEmployeeId)), (snap) => {
             setMissions(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Mission)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'missions'));
     }
@@ -196,8 +193,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubAbsenceRecords = onSnapshot(collection(db, 'absenceRecords'), (snap) => {
             setAbsenceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AbsenceRecord)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'absenceRecords'));
-    } else if (profile?.id) {
-        unsubAbsenceRecords = onSnapshot(query(collection(db, 'absenceRecords'), where('employeeId', '==', profile.id)), (snap) => {
+    } else if (actualEmployeeId) {
+        unsubAbsenceRecords = onSnapshot(query(collection(db, 'absenceRecords'), where('employeeId', '==', actualEmployeeId)), (snap) => {
             setAbsenceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AbsenceRecord)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'absenceRecords'));
     }
@@ -207,8 +204,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubLeaveRequests = onSnapshot(collection(db, 'leaveRequests'), (snap) => {
             setLeaveRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'leaveRequests'));
-    } else if (profile?.id) {
-        unsubLeaveRequests = onSnapshot(query(collection(db, 'leaveRequests'), where('employeeId', '==', profile.id)), (snap) => {
+    } else if (actualEmployeeId) {
+        unsubLeaveRequests = onSnapshot(query(collection(db, 'leaveRequests'), where('employeeId', '==', actualEmployeeId)), (snap) => {
             setLeaveRequests(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as LeaveRequest)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'leaveRequests'));
     }
@@ -218,8 +215,8 @@ export const DataProvider: React.FC<{ children: React.ReactNode }> = ({ children
         unsubAttendanceRecords = onSnapshot(collection(db, 'attendanceRecords'), (snap) => {
             setAttendanceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'attendanceRecords'));
-    } else if (profile?.id) {
-        unsubAttendanceRecords = onSnapshot(query(collection(db, 'attendanceRecords'), where('employeeId', '==', profile.id)), (snap) => {
+    } else if (actualEmployeeId) {
+        unsubAttendanceRecords = onSnapshot(query(collection(db, 'attendanceRecords'), where('employeeId', '==', actualEmployeeId)), (snap) => {
             setAttendanceRecords(snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as AttendanceRecord)));
         }, (err) => handleLocalError(err, OperationType.LIST, 'attendanceRecords'));
     }

@@ -12,7 +12,9 @@ import {
   Settings,
   X as CloseIcon
 } from 'lucide-react';
-import { db, collection, setDoc, doc, deleteDoc, OperationType, handleFirestoreError } from '../../firebase';
+import { db, collection, setDoc, doc, deleteDoc, OperationType, handleFirestoreError, firebaseConfig } from '../../firebase';
+import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { initializeApp } from 'firebase/app';
 import { useData } from '../../contexts/DataContext';
 import { AppUser, UserRole, PermissionConfig, ScreenActionConfig } from '../../types';
 import { cn } from '../../lib/utils';
@@ -33,7 +35,7 @@ const AVAILABLE_SCREENS = [
   { id: 'transactions', name: 'الحركات الشهرية' },
   { id: 'payroll', name: 'مسيرات الرواتب' },
   { id: 'settlements', name: 'تصفية البيانات والتسويات' },
-  { id: 'users', name: 'إدارة المستخدمين' }
+  { id: 'users', name: 'إعدادات الحسابات والأمان' }
 ];
 
 export const UsersManagement: React.FC = () => {
@@ -42,7 +44,7 @@ export const UsersManagement: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string, show: boolean }>({ id: '', show: false });
-  const [showAdvancedPerms, setShowAdvancedPerms] = useState(false);
+  const [authPassword, setAuthPassword] = useState('');
 
   const [formData, setFormData] = useState<Omit<AppUser, 'id' | 'createdAt'>>({
     email: '',
@@ -57,15 +59,16 @@ export const UsersManagement: React.FC = () => {
 
   const openAddModal = () => {
     setEditingUserId(null);
+    setAuthPassword('');
     setFormData({
       email: '', name: '', role: 'Viewer', status: 'Active', permissions: { screens: {}, departments: [] }
     });
-    setShowAdvancedPerms(false);
     setIsModalOpen(true);
   };
 
   const openEditModal = (u: AppUser) => {
     setEditingUserId(u.id);
+    setAuthPassword('');
     setFormData({
       email: u.email,
       name: u.name,
@@ -73,7 +76,6 @@ export const UsersManagement: React.FC = () => {
       status: u.status,
       permissions: u.permissions || { screens: {}, departments: [] }
     });
-    setShowAdvancedPerms(false);
     setIsModalOpen(true);
   };
 
@@ -84,6 +86,25 @@ export const UsersManagement: React.FC = () => {
     const id = editingUserId || formData.email.toLowerCase();
     
     try {
+      // Create Firebase Auth user via secondary app if password is provided (creation only)
+      if (!editingUserId && authPassword) {
+        try {
+          const appName = "SecondaryAppForUserCreation_" + Date.now();
+          const secondaryApp = initializeApp(firebaseConfig, appName);
+          const secondaryAuth = getAuth(secondaryApp);
+          await createUserWithEmailAndPassword(secondaryAuth, formData.email.trim().toLowerCase(), authPassword);
+          await secondaryAuth.signOut();
+        } catch (authErr: any) {
+          if (authErr.code === 'auth/email-already-in-use') {
+             console.log("User already exists in Firebase Auth, proceeding to create/update permissions document.");
+          } else if (authErr.code === 'auth/operation-not-allowed') {
+             throw new Error("تفعيل تسجيل الدخول بالبريد الإلكتروني معطل في إعدادات Firebase الخاصة بك. يرجى تفعيله من قسم Authentication في وحدة تحكم Firebase (Firebase Console) والمحاولة مرة أخرى.");
+          } else {
+             throw authErr;
+          }
+        }
+      }
+
       await setDoc(doc(db, 'users', id), {
         ...formData,
         email: formData.email.toLowerCase(),
@@ -92,8 +113,9 @@ export const UsersManagement: React.FC = () => {
       }, { merge: true }); // Using merge true will let existing properties persist or overwrite properly
       
       setIsModalOpen(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error("Error setting user doc:", err);
+      alert(err?.message || "حدث خطأ ما");
       handleFirestoreError(err, OperationType.UPDATE, 'users');
     }
   };
@@ -140,14 +162,24 @@ export const UsersManagement: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
+      <div className="flex items-center gap-4 bg-white p-6 rounded-[2rem] border border-gray-100 shadow-sm">
+        <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-lg shadow-blue-200">
+          <ShieldAlert className="w-8 h-8 text-white" />
+        </div>
+        <div>
+          <h1 className="text-3xl font-black text-gray-900">إعدادات الحسابات والأمان</h1>
+          <p className="text-gray-500 font-medium mt-1">إدارة حسابات الدخول للأنظمة، كلمات المرور، والتحكم الشامل في الصلاحيات</p>
+        </div>
+      </div>
+
       {/* Header Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input 
             type="text" 
-            placeholder="البحث عن مستخدم بالاسم أو البريد..."
+            placeholder="البحث عن حساب بالاسم أو البريد..."
             className="w-full pr-12 pl-4 py-3 bg-white border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium shadow-sm"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
@@ -158,7 +190,7 @@ export const UsersManagement: React.FC = () => {
           className="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-200"
         >
           <Plus className="w-5 h-5" />
-          <span>إضافة مستخدم جديد</span>
+          <span>إنشاء حساب جديد</span>
         </button>
       </div>
 
@@ -237,10 +269,10 @@ export const UsersManagement: React.FC = () => {
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className={cn("relative bg-white w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh]", showAdvancedPerms ? "max-w-4xl rounded-2xl" : "max-w-md rounded-[2.5rem]")}
+              className="relative bg-white w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] max-w-5xl rounded-2xl"
             >
               <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50 shrink-0">
-                <h3 className="text-xl font-black text-gray-900">{editingUserId ? 'تعديل المستخدم' : 'إضافة مستخدم جديد'}</h3>
+                <h3 className="text-xl font-black text-gray-900">{editingUserId ? 'إعدادات الحساب والصلاحيات' : 'إنشاء حساب جديد'}</h3>
                 <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white rounded-xl transition-colors">
                   <CloseIcon className="w-5 h-5 text-gray-400" />
                 </button>
@@ -268,6 +300,20 @@ export const UsersManagement: React.FC = () => {
                         onChange={(e) => setFormData({...formData, email: e.target.value})}
                       />
                     </div>
+                    {!editingUserId && (
+                      <div className="space-y-2">
+                        <label className="text-sm font-bold text-gray-500 mr-2">كلمة المرور</label>
+                        <input 
+                          type="password"
+                          required
+                          minLength={6}
+                          placeholder="كلمة مرور الدخول للموظف..."
+                          className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none font-medium text-gray-800"
+                          value={authPassword}
+                          onChange={(e) => setAuthPassword(e.target.value)}
+                        />
+                      </div>
+                    )}
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-gray-500 mr-2">مجموعة الصلاحيات العامة (الرتبة)</label>
                       <select 
@@ -294,30 +340,18 @@ export const UsersManagement: React.FC = () => {
                     </div>
                   </div>
 
-                  {!showAdvancedPerms && (
-                    <button 
-                      type="button"
-                      onClick={() => setShowAdvancedPerms(true)}
-                      className="w-full mt-6 py-3 border-2 border-dashed border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 rounded-2xl font-bold transition-colors flex items-center justify-center gap-2"
-                    >
-                      <Settings className="w-4 h-4" />
-                      خيارات الصلاحيات المتقدمة
-                    </button>
-                  )}
-
                   <div className="pt-6 mt-6 border-t border-gray-100">
                     <button 
                       type="submit"
                       className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-2xl transition-all shadow-lg shadow-blue-200"
                     >
-                      {editingUserId ? 'حفظ التعديلات' : 'إضافة المستخدم'}
+                      {editingUserId ? 'حفظ إعدادات الحساب' : 'إنشاء الحساب والمستخدم'}
                     </button>
                   </div>
                 </div>
 
                 {/* Advanced Permissions Panel */}
-                {showAdvancedPerms && (
-                  <div className="flex-1 bg-gray-50 p-6 overflow-y-auto min-w-[500px]">
+                <div className="flex-1 bg-gray-50 p-6 overflow-y-auto min-w-[500px]">
                     <div className="flex items-center justify-between mb-6">
                       <h4 className="text-xl font-black text-gray-800 flex items-center gap-2">
                         <Shield className="w-5 h-5 text-blue-600" />
@@ -385,7 +419,6 @@ export const UsersManagement: React.FC = () => {
                       </table>
                     </div>
                   </div>
-                )}
               </form>
             </motion.div>
           </div>

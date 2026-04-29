@@ -140,8 +140,7 @@ service cloud.firestore {
     match /payrollResults/{resultId} {
       allow get: if isSignedIn() && isValidId(resultId) && (isFinance() || isOwnerOfEmployee(existing().employeeId));
       allow list: if isSignedIn(); // Relaxed for query support
-      allow create: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']) &&
-          existsAfter(/databases/$(database)/documents/payrollRuns/$(incoming().payrollRunId));
+      allow create: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']);
       allow update: if isFinance() && isValidId(resultId) && incoming().keys().hasAll(['payrollRunId', 'employeeId', 'netSalary']);
       allow delete: if isAdmin() && isValidId(resultId);
     }

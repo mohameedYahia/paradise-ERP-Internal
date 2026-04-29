@@ -65,6 +65,22 @@ export const Layout: React.FC = () => {
   // Filter out completely hidden modules
   const visibleModules = modules.filter(m => m.show);
 
+  useEffect(() => {
+    const handleNavigate = (e: any) => {
+      const { module, tab, entityId, type } = e.detail;
+      setActiveModule(module);
+      setActiveTab(tab);
+      // We also need to tell the Operations/MyTasks component to select the specific project/task.
+      // Easiest is to store it globally or use sessionStorage to pick it up on mount/render.
+      if (entityId) {
+        sessionStorage.setItem('target_entity_id', entityId);
+        sessionStorage.setItem('target_entity_type', type);
+      }
+    };
+    window.addEventListener('navigate_to_entity', handleNavigate);
+    return () => window.removeEventListener('navigate_to_entity', handleNavigate);
+  }, []);
+
   // Auto fallback to first available module if active is not visible
   useEffect(() => {
      if (visibleModules.length > 0 && !visibleModules.find(m => m.id === activeModule)) {

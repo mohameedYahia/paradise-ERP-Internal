@@ -38,7 +38,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           try {
             const userDoc = await getDoc(doc(db, 'users', userEmail));
             if (userDoc.exists()) {
-              setProfile({ id: userDoc.id, ...userDoc.data() } as AppUser);
+              let employeeId = null;
+              // Attempt to find associated employee record
+              try {
+                const empQuery = query(collection(db, 'employees'), where('email', '==', userEmail.trim()));
+                const empSnap = await getDocs(empQuery);
+                if (!empSnap.empty) {
+                  employeeId = empSnap.docs[0].id;
+                }
+              } catch(e) {}
+              
+              setProfile({ id: userDoc.id, employeeId, ...userDoc.data() } as AppUser & { employeeId?: string | null });
               setLoading(false);
               return;
             }
